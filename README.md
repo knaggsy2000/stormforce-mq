@@ -7,9 +7,12 @@ For license and copyright, please see the LICENSE file.
 ## Preface
 StormForce MQ (SMQ) is the third generation of the StormForce series of software: -
 
-> 1st Generation: StormForce - https://github.com/knaggsy2000/stormforce-legacy
-> 2nd Generation: StormForce XR - https://github.com/knaggsy2000/stormforce-xr
-> 3rd Generation: StormForce MQ - https://github.com/knaggsy2000/stormforce-mq
+
+```
+1st Generation: StormForce - https://github.com/knaggsy2000/stormforce-legacy
+2nd Generation: StormForce XR - https://github.com/knaggsy2000/stormforce-xr
+3rd Generation: StormForce MQ - https://github.com/knaggsy2000/stormforce-mq
+```
 
 
 Based on the StormForce XR codebase, SMQ uses RabbitMQ (https://www.rabbitmq.com/) as its communication core is designed for real-time notification of strikes, storms, and allows extensibility through the use of plugins (wrote in Python).  The plugins handle both the hardware interface and the extensibility of how the data is handled and is configured with separate XML files (one for each plugin).  When SMQ is started for the first time it will create the XML settings files for everything, you will then need to close SMQ and configure each plugin as required, as by-default they will be disabled.
@@ -119,16 +122,18 @@ On the command line: -
 ###FreeBSD
 Here are the packages I've currently got installed for StormForce MQ to work: -
 
-> /usr/ports/databases/postgresql95-server/
-> /usr/ports/databases/postgresql95-client/
-> /usr/ports/databases/postgresql95-contrib/
-> /usr/ports/lang/python/
-> /usr/ports/comms/py-serial/
-> /usr/ports/databases/py-psycopg2/
-> /usr/ports/devel/py-game/
-> /usr/ports/devel/py-pika/
-> /usr/ports/devel/py-twisted/
-> /usr/ports/math/py-matplotlib/
+```
+/usr/ports/databases/postgresql95-server/
+/usr/ports/databases/postgresql95-client/
+/usr/ports/databases/postgresql95-contrib/
+/usr/ports/lang/python/
+/usr/ports/comms/py-serial/
+/usr/ports/databases/py-psycopg2/
+/usr/ports/devel/py-game/
+/usr/ports/devel/py-pika/
+/usr/ports/devel/py-twisted/
+/usr/ports/math/py-matplotlib/
+```
 
 
 ###Linux
@@ -171,6 +176,8 @@ Once setup, give StormForce MQ the connection details in the settings XML file.
 
 
 ##FAQ
+
+```
 Q. What operating systems does it support?
 A. I develop and test StormForce MQ with FreeBSD 10.2, it should work in other POSIX compliant operating systems as well other distros of Linux.
 
@@ -185,7 +192,7 @@ A. I'm currently not accepting feature requests at this stage.
 
 Q. Can StormForce MQ send it's strike data to Blitzortung?
 A. Unfortunately this is not possible due the strikes needing microsecond accuracy which the Boltek LD-250 doesn't provide, even when used with a GPS unit.  Egor from Blitzortung informed me of this.
-
+```
 
 ##Legal
 I am in no way affiliated or in partnership with either Boltek, Google, NASA, Microsoft, or anyone else.
