@@ -7,7 +7,7 @@ For license and copyright, please see the LICENSE file.
 ## Preface
 StormForce MQ (SMQ) is the third generation of the StormForce series of software: -
 
-> 1st Generation: StormForce    - https://github.com/knaggsy2000/stormforce-legacy
+> 1st Generation: StormForce - https://github.com/knaggsy2000/stormforce-legacy
 > 2nd Generation: StormForce XR - https://github.com/knaggsy2000/stormforce-xr
 > 3rd Generation: StormForce MQ - https://github.com/knaggsy2000/stormforce-mq
 
@@ -17,41 +17,42 @@ Based on the StormForce XR codebase, SMQ uses RabbitMQ (https://www.rabbitmq.com
 
 The core plugins ("plugin_core_*.py") provide the following functionality: -
 
-**Name:**        Base
-**Filename:**    plugin_core_base.py
-**Routing Key:** N/A
-**Description:** Provides the skeleton framework needed for the plugin system
+```
+Name:        Base
+Filename:    plugin_core_base.py
+Routing Key: N/A
+Description: Provides the skeleton framework needed for the plugin system
 
-**Name:**        Debug
-**Filename:**    plugin_core_debug.py
-**Routing Key:** events.#
-**Description:** Provides debug information to the console which is useful for debugging, also useful if you want write your own plugins
+Name:        Debug
+Filename:    plugin_core_debug.py
+Routing Key: events.#
+Description: Provides debug information to the console which is useful for debugging, also useful if you want write your own plugins
 
-**Name:**        MQ Client
-**Filename:**    plugin_core_mqclient.py
-**Routing Key:** events.#
-**Description:** Provides real-time messages of strikes and storms and broadcasts them for use with the SMQ client - this plugin is based from the repeater plugin codebase
+Name:        MQ Client
+Filename:    plugin_core_mqclient.py
+Routing Key: events.#
+Description: Provides real-time messages of strikes and storms and broadcasts them for use with the SMQ client - this plugin is based from the repeater plugin codebase
 
-**Name:**        Repeater
-**Filename:**    plugin_core_repeater.py
-**Routing Key:** events.#
-**Description:** Publishes all the received events onto a different MQ exchange
+Name:        Repeater
+Filename:    plugin_core_repeater.py
+Routing Key: events.#
+Description: Publishes all the received events onto a different MQ exchange
 
-**Name:**        Strike Counters
-**Filename:**    plugin_core_strikecounters.py
-**Routing Key:** events.plugin.core.strikecounters
-**Description:** Provides the functionality which handles the strike counters and resets them when required
+Name:        Strike Counters
+Filename:    plugin_core_strikecounters.py
+Routing Key: events.plugin.core.strikecounters
+Description: Provides the functionality which handles the strike counters and resets them when required
 
-**Name:**        SXR
-**Filename:**    plugin_core_sxr.py
-**Routing Key:** N/A
-**Description:** Provides an XMLRPC frontend (using the Twisted library) which is 100% compatible with the StormForce XR client.  Requires the Boltek LD-250 hardware plugin
+Name:        SXR
+Filename:    plugin_core_sxr.py
+Routing Key: N/A
+Description: Provides an XMLRPC frontend (using the Twisted library) which is 100% compatible with the StormForce XR client.  Requires the Boltek LD-250 hardware plugin
 
-**Name:**        TRAC
-**Filename:**    plugin_core_trac.py
-**Routing Key:** events.plugin.core.trac
-**Description:** Provides the functionality which handles the tracking of thunderstorms.  Requires the Boltek LD-250 hardware plugin
-
+Name:        TRAC
+Filename:    plugin_core_trac.py
+Routing Key: events.plugin.core.trac
+Description: Provides the functionality which handles the tracking of thunderstorms.  Requires the Boltek LD-250 hardware plugin
+```
 
 When writing your own plugins, ensure the filename starts with "plugin_<NAME>" (e.g. "plugin_myplugin") and not "plugin_core", this is to identify the core plugins provided by this project.  The same goes if you decide to use your own routing key, don't use anything which starts with "events.plugin.core" but instead use "events.plugin.<NAME>".  The routing key of "event.plugin" will be passed to the initialisation of the plugin so you can use it to prefix your own or even not use it at all.
 
@@ -59,30 +60,31 @@ When writing your own plugins, ensure the filename starts with "plugin_<NAME>" (
 
 The core hardware plugins ("hardware_core_*.py") provides the interface between hardware and SMQ: -
 
-**Hardware:**    N/A
-**Name:**        Base
-**Filename:**    hardware_core_base.py
-**Routing Key:** N/A
-**Description:** Provides the skeleton framework needed for the hardware system
+```
+Hardware:    N/A
+Name:        Base
+Filename:    hardware_core_base.py
+Routing Key: N/A
+Description: Provides the skeleton framework needed for the hardware system
 
-**Hardware:**    Boltek EFM-100
-**Name:**        EFM100
-**Filename:**    hardware_core_efm100.py
-**Routing Key:** events.hardware.core.efm100
-**Description:** Interfaces with the Boltek EFM-100 and writes the information to the SMQ database, also useful if you want to write your own hardware plugin so SMQ can use it
+Hardware:    Boltek EFM-100
+Name:        EFM100
+Filename:    hardware_core_efm100.py
+Routing Key: events.hardware.core.efm100
+Description: Interfaces with the Boltek EFM-100 and writes the information to the SMQ database, also useful if you want to write your own hardware plugin so SMQ can use it
 
-**Hardware:**    Boltek LD-250
-**Name:**        LD250
-**Filename:**    hardware_core_ld250.py
-**Routing Key:** events.hardware.core.ld250
-**Description:** Interfaces with the Boltek LD-250 and writes the information to the SMQ database
+Hardware:    Boltek LD-250
+Name:        LD250
+Filename:    hardware_core_ld250.py
+Routing Key: events.hardware.core.ld250
+Description: Interfaces with the Boltek LD-250 and writes the information to the SMQ database
 
-**Hardware:**    Boltek LD-350
-**Name:**        LD350
-**Filename:**    hardware_core_ld350.py
-**Routing Key:** events.hardware.core.ld350
-**Description:** **Currently does not work due to how that unit exposes itself to the operating system** Interfaces with the Boltek LD-350 and writes the information to the SMQ database
-
+Hardware:    Boltek LD-350
+Name:        LD350
+Filename:    hardware_core_ld350.py
+Routing Key: events.hardware.core.ld350
+Description: Currently does not work due to how that unit exposes itself to the operating system Interfaces with the Boltek LD-350 and writes the information to the SMQ database
+```
 
 When writing your own hardware plugins, ensure the filename starts with filename "hardware_<NAME>" (e.g. "hardware_myhardware") and not "hardware_core", this is to identify the core hardware provided by this project.  The same goes if you decide to use your own routing key, don't use anything which starts with "events.hardware.core" but instead use "events.hardware.<NAME>".  The routing key of "event.hardware" will be passed to the initialisation of the plugin so you can use it to prefix your own or even not use it at all.
 
@@ -100,13 +102,17 @@ Both the hardware and plugins are provided with their own connection to both the
 
 ##Usage
 On the command line: -
+
 ```
 % python smq_server.py
 ```
 
 ##TRAC Detection Methods
-> 0 = Uses a fixed-grid to determine whether the number of strikes exceeds a threshold
-> 1 = Uses a freestyle-grid to determine whether the number of strikes exceeds a threshold
+
+```
+0 = Uses a fixed-grid to determine whether the number of strikes exceeds a threshold
+1 = Uses a freestyle-grid to determine whether the number of strikes exceeds a threshold
+```
 
 
 ##Installation
@@ -141,6 +147,7 @@ Untested - But no problems are expected.
 All that StormForce MQ needs is the actual database and username setup, the tables, views, indices, and functions will be handled by the program itself.
 
 Run the following commands: -
+
 ```
  # su pgsql
  $ createdb stormforce_mq
