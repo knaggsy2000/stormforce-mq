@@ -129,10 +129,10 @@ class Hardware(HardwareBase):
 						m = None
 						
 						if sentence.startswith(self.device.EFM_POSITIVE):
-							m = self.constructMessage(self.device.EFM_POSITIVE, {"electric_field_level": efl, "fault_present": fault_present})
+							m = self.constructMessage(self.device.EFM_POSITIVE, {"ElectricFieldLevel": efl, "FaultPresent": fault_present})
 							
 						elif sentence.startswith(self.device.EFM_NEGATIVE):
-							m = self.constructMessage(self.device.EFM_NEGATIVE, {"electric_field_level": efl, "fault_present": fault_present})
+							m = self.constructMessage(self.device.EFM_NEGATIVE, {"ElectricFieldLevel": efl, "FaultPresent": fault_present})
 						
 						self.mq.publishMessage(m[1], headers = m[0])
 					

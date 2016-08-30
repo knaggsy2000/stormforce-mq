@@ -59,16 +59,13 @@ class Plugin(PluginBase):
 		PluginBase.__init__(self, filename, "TRAC", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
 		
 		
-		self.running = False
-		
-		
 		self.MAP_MATRIX_SIZE = (600, 600)
 		self.MQ_RX_ENABLED = False
 		
 		self.TRAC_DETECTION_METHOD = 1
 		self.TRAC_SENSITIVITY = 5
 		self.TRAC_STORM_WIDTH = 30 # miles
-		self.TRAC_UPDATE_TIME = 1 # minutes
+		self.TRAC_UPDATE_TIME = 15. # seconds
 		self.TRAC_VERSION = "0.4.1"
 	
 	def readXMLSettings(self):
@@ -87,16 +84,16 @@ class Plugin(PluginBase):
 					if key == "Enabled":
 						self.ENABLED = self.cBool(val)
 						
-					elif key == "TRACDetectionMethod":
+					elif key == "DetectionMethod":
 						self.TRAC_DETECTION_METHOD = int(val)
 						
-					elif key == "TRACSensitivity":
+					elif key == "Sensitivity":
 						self.TRAC_SENSITIVITY = int(val)
 						
-					elif key == "TRACStormWidth":
+					elif key == "StormWidth":
 						self.TRAC_STORM_WIDTH = int(val)
 						
-					elif key == "TRACUpdateTime":
+					elif key == "UpdateTime":
 						self.TRAC_UPDATE_TIME = int(val)
 	
 	def run(self):
@@ -106,10 +103,10 @@ class Plugin(PluginBase):
 		trac_wait = self.datetime.now() + self.timedelta(seconds = self.TRAC_UPDATE_TIME)
 		
 		while self.running:
-			try:
-				t = self.datetime.now()
-				
-				if t >= trac_wait:
+			t = self.datetime.now()
+			
+			if t >= trac_wait:
+				try:
 					myconn = []
 					self.db.connectToDatabase(myconn)
 					
@@ -124,7 +121,7 @@ class Plugin(PluginBase):
 						for row in trac_status:
 							self.log.info("TRAC has detected {:d} storms.".format(row[2]))
 							
-							m = self.constructMessage("Status", {"version": row[0], "active": row[1], "number_of_storms": row[2], "most_active": row[3], "most_active_distance": row[4], "closest": row[5], "closest_distance": row[6], "width": row[7]})
+							m = self.constructMessage("Status", {"Version": row[0], "Active": row[1], "NumberOfStorms": row[2], "MostActive": row[3], "MostActiveDistance": float(row[4]), "Closest": row[5], "ClosestDistance": float(row[6]), "Width": row[7]})
 							self.mq.publishMessage(m[1], headers = m[0])
 							break
 						
@@ -136,22 +133,22 @@ class Plugin(PluginBase):
 						ret = []
 						
 						for row in trac_storms:
-							ret.append({"x": row[0], "y": row[1], "x_offset": row[2], "y_offset": row[3], "name": row[4], "intensity": row[5], "distance": row[6]})
+							ret.append({"X": row[0], "Y": row[1], "XOffset": row[2], "YOffset": row[3], "Name": row[4], "Intensity": row[5], "Distance": float(row[6])})
 						
 						m = self.constructMessage("Storms", ret)
 						self.mq.publishMessage(m[1], headers = m[0])
 						
 					else:
 						self.log.warn("TRAC storms failed to run, review any SQL errors.")
-				
-			except Exception, ex:
-				self.log.error("An error occurred while running TRAC.")
-				self.log.error(ex)
-				
-			finally:
-				trac_wait = self.datetime.now() + self.timedelta(seconds = self.TRAC_UPDATE_TIME)
-				
-				self.time.sleep(0.1)
+					
+				except Exception, ex:
+					self.log.error("An error occurred while running TRAC.")
+					self.log.error(ex)
+					
+				finally:
+					trac_wait = self.datetime.now() + self.timedelta(seconds = self.TRAC_UPDATE_TIME)
+			
+			self.time.sleep(0.1)
 	
 	def start(self):
 		PluginBase.start(self)
@@ -878,19 +875,19 @@ $$ LANGUAGE plpgsql;
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("TRACDetectionMethod", str(self.TRAC_DETECTION_METHOD))
+			var.setAttribute("DetectionMethod", str(self.TRAC_DETECTION_METHOD))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("TRACSensitivity", str(self.TRAC_SENSITIVITY))
+			var.setAttribute("Sensitivity", str(self.TRAC_SENSITIVITY))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("TRACStormWidth", str(self.TRAC_STORM_WIDTH))
+			var.setAttribute("StormWidth", str(self.TRAC_STORM_WIDTH))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("TRACUpdateTime", str(self.TRAC_UPDATE_TIME))
+			var.setAttribute("UpdateTime", str(self.TRAC_UPDATE_TIME))
 			settings.appendChild(var)
 			
 			

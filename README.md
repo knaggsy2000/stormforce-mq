@@ -1,7 +1,11 @@
-# StormForce MQ - Release v0.1.0 on 28/08/2016
-Link: https://github.com/knaggsy2000/stormforce-mq
+# StormForce MQ - Release v0.1.1 on 30/08/2016
+
+```
+Link:         https://github.com/knaggsy2000/stormforce-mq
+Code Quality: Alpha - Expect plenty of bugs!
 
 For license and copyright, please see the LICENSE file.
+```
 
 
 ## Preface
@@ -9,7 +13,7 @@ StormForce MQ (SMQ) is the third generation of the StormForce series of software
 
 
 ```
-1st Generation: StormForce - https://github.com/knaggsy2000/stormforce-legacy
+1st Generation: StormForce    - https://github.com/knaggsy2000/stormforce-legacy
 2nd Generation: StormForce XR - https://github.com/knaggsy2000/stormforce-xr
 3rd Generation: StormForce MQ - https://github.com/knaggsy2000/stormforce-mq
 ```
@@ -41,6 +45,11 @@ Filename:    plugin_core_repeater.py
 Routing Key: events.#
 Description: Publishes all the received events onto a different MQ exchange
 
+Name:        Server Details
+Filename:    plugin_core_serverdetails.py
+Routing Key: events.plugin.core.serverdetails
+Description: Provides the functionality which handles the server details
+
 Name:        Strike Counters
 Filename:    plugin_core_strikecounters.py
 Routing Key: events.plugin.core.strikecounters
@@ -55,6 +64,11 @@ Name:        TRAC
 Filename:    plugin_core_trac.py
 Routing Key: events.plugin.core.trac
 Description: Provides the functionality which handles the tracking of thunderstorms.  Requires the Boltek LD-250 hardware plugin
+
+Name:        Unit Status
+Filename:    plugin_core_unitstatus.py
+Routing Key: events.plugin.core.unitstatus
+Description: Provides the functionality which handles the unit status
 ```
 
 When writing your own plugins, ensure the filename starts with "plugin_<NAME>" (e.g. "plugin_myplugin") and not "plugin_core", this is to identify the core plugins provided by this project.  The same goes if you decide to use your own routing key, don't use anything which starts with "events.plugin.core" but instead use "events.plugin.<NAME>".  The routing key of "event.plugin" will be passed to the initialisation of the plugin so you can use it to prefix your own or even not use it at all.
@@ -86,7 +100,7 @@ Hardware:    Boltek LD-350
 Name:        LD350
 Filename:    hardware_core_ld350.py
 Routing Key: events.hardware.core.ld350
-Description: Currently does not work due to how that unit exposes itself to the operating system Interfaces with the Boltek LD-350 and writes the information to the SMQ database
+Description: *** Currently does not work due to how that unit exposes itself to the operating system *** Interfaces with the Boltek LD-350 and writes the information to the SMQ database
 ```
 
 When writing your own hardware plugins, ensure the filename starts with filename "hardware_<NAME>" (e.g. "hardware_myhardware") and not "hardware_core", this is to identify the core hardware provided by this project.  The same goes if you decide to use your own routing key, don't use anything which starts with "events.hardware.core" but instead use "events.hardware.<NAME>".  The routing key of "event.hardware" will be passed to the initialisation of the plugin so you can use it to prefix your own or even not use it at all.
@@ -96,6 +110,16 @@ Both the hardware and plugins are provided with their own connection to both the
 
 
 ## Notes (S = server, C = client)
+###v0.1.1 - 30th August 2016
+> 1. (S) Fixed issue with strike counters where it incorrectly reset the minute counter every second.
+> 2. (S) Removed UI-based events from the MQ client plugin as it doesn't deal with them, the client should.
+> 3. (S) New core plugin: unit status.
+> 4. (S) Plugins now get initialised before the hardware.
+> 5. (S) New core plugin: server details.
+> 6. (S) TRAC plugin incorrectly updated it's wait time causing it to never run.
+> 7. (S) Various plugins weren't serialising correctly to JSON which used types datetime, decimals, etc.  Should be fixed now.
+> 8. (C) SMQ UI-based client.
+
 ###v0.1.0 - 28th August 2016
 > 1. (S) Initial release - no SMQ client (yet).
 
@@ -114,7 +138,7 @@ On the command line: -
 
 ```
 0 = Uses a fixed-grid to determine whether the number of strikes exceeds a threshold
-1 = Uses a freestyle-grid to determine whether the number of strikes exceeds a threshold
+1 = Uses a freestyle-grid to determine whether the number of strikes exceeds a threshold (recommended)
 ```
 
 

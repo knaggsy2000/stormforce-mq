@@ -79,6 +79,7 @@ class PluginBase():
 		self.minidom = minidom
 		self.mq = MQ(mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to, self.onEventReceived)
 		self.os = os
+		self.running = False
 		self.threading = threading
 		self.time = time
 		self.timedelta = timedelta

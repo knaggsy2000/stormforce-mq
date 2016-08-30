@@ -67,20 +67,16 @@ class Plugin(PluginBase):
 		self.MQ_USERNAME = "guest"
 		self.MQ_VIRTUAL_HOST = "/"
 		
-		self.UPDATE_PERIOD_CAPTURE = 15.
-		self.UPDATE_PERIOD_CURRENT_TIME = 1.
-		self.UPDATE_PERIOD_EFM100 = 5.
 		self.UPDATE_PERIOD_GRAPHS = 60.
-		self.UPDATE_PERIOD_LD250 = 1.
-		self.UPDATE_PERIOD_STRIKES = 15.
+		self.UPDATE_PERIOD_STRIKES_PERSISTENCE = 15.
 		
 		
+		self.ORIGINAL_ROUTING_KEY = "{0}.core.mqclient".format(mq_routing_key)
 		mq_routing_key = "events.#"
 		
 		PluginBase.__init__(self, filename, "MQClient", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
 		
 		self.mqc = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, None)
-		self.running = False
 	
 	def onEventReceived(self, basic_deliver, properties, body):
 		PluginBase.onEventReceived(self, basic_deliver, properties, body)
@@ -126,114 +122,73 @@ class Plugin(PluginBase):
 					elif key == "MQExchangeName":
 						self.MQ_EXCHANGE_NAME = val
 						
-					elif key == "UpdatePeriodCapture":
-						self.UPDATE_PERIOD_CAPTURE = float(val)
-						
-					elif key == "UpdatePeriodCurrentTime":
-						self.UPDATE_PERIOD_CURRENT_TIME = float(val)
-						
-					elif key == "UpdatePeriodEFM100":
-						self.UPDATE_PERIOD_EFM100 = float(val)
-						
-					elif key == "UpdatePeriodGraphs":
+					elif key == "UpdatePeriodStrikesGraphs":
 						self.UPDATE_PERIOD_GRAPHS = float(val)
 						
-					elif key == "UpdatePeriodLD250":
-						self.UPDATE_PERIOD_LD250 = float(val)
-						
-					elif key == "UpdatePeriodStrikes":
-						self.UPDATE_PERIOD_STRIKES = float(val)
+					elif key == "UpdatePeriodStrikesPersistence":
+						self.UPDATE_PERIOD_STRIKES_PERSISTENCE = float(val)
 	
 	def run(self):
 		self.log.debug("Starting...")
 		
 		
-		capture_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_CAPTURE)
-		efm100_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_EFM100)
 		graphs_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_GRAPHS)
-		ld250_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_LD250)
-		strikes_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_STRIKES)
-		time_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_CURRENT_TIME)
+		strikes_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_STRIKES_PERSISTENCE)
 		
 		while self.running:
 			t = self.datetime.now()
 			
-			try:
-				if t >= capture_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
+			
+			if t >= strikes_wait:
+				try:
+					myconn = []
+					self.db.connectToDatabase(myconn)
+					
+					rows = self.db.executeSQLQuery("SELECT DISTINCT StrikeAge, X, Y, X - 300 AS RelativeX, Y - 300 AS RelativeY, DateTimeOfStrike FROM vwLD250StrikesPersistence ORDER BY DateTimeOfStrike ASC", conn = myconn)
+					
+					self.db.disconnectFromDatabase(myconn)
+					
+					
+					ret = []
+					
+					for row in rows:
+						ret.append({"StrikeAge": row[0], "ScreenX": row[1], "ScreenY": row[2], "RelativeX": row[3], "RelativeY": row[4], "DateTimeOfStrike": str(row[5])})
+					
+					m = self.constructMessage("StrikesPersistence", ret)
+					self.mq.publishMessage(m[1], headers = m[0], routing_key = self.ORIGINAL_ROUTING_KEY)
+					
+				except Exception, ex:
+					self.log.error("An error occurred while running the capture.")
+					self.log.error(ex)
 				
-			except Exception, ex:
-				self.log.error("An error occurred while running the capture.")
-				self.log.error(ex)
-				
-			finally:
-				capture_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_CAPTURE)
+				finally:
+					strikes_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_STRIKES_PERSISTENCE)
 			
 			
-			try:
-				if t >= efm100_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
+			if t >= graphs_wait:
+				try:
+					myconn = []
+					self.db.connectToDatabase(myconn)
+					
+					rows = self.db.executeSQLQuery("SELECT Minute, StrikeAge, NumberOfStrikes FROM vwLD250StrikesSummaryByMinute ORDER BY Minute", conn = myconn)
+					
+					self.db.disconnectFromDatabase(myconn)
+					
+					
+					ret = []
+					
+					for row in rows:
+						ret.append({"Minute": str(row[0]), "StrikeAge": row[1], "NumberOfStrikes": row[2]})
+					
+					m = self.constructMessage("StrikesSummaryByMinute", ret)
+					self.mq.publishMessage(m[1], headers = m[0], routing_key = self.ORIGINAL_ROUTING_KEY)
+					
+				except Exception, ex:
+					self.log.error("An error occurred while running the graphs.")
+					self.log.error(ex)
 				
-			except Exception, ex:
-				self.log.error("An error occurred while running the EFM-100.")
-				self.log.error(ex)
-				
-			finally:
-				efm100_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_EFM100)
-			
-			
-			try:
-				if t >= graphs_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
-				
-			except Exception, ex:
-				self.log.error("An error occurred while running the graphs.")
-				self.log.error(ex)
-				
-			finally:
-				graphs_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_GRAPHS)
-			
-			
-			try:
-				if t >= ld250_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
-				
-			except Exception, ex:
-				self.log.error("An error occurred while running the LD-250.")
-				self.log.error(ex)
-				
-			finally:
-				ld250_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_LD250)
-			
-			
-			try:
-				if t >= strikes_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
-				
-			except Exception, ex:
-				self.log.error("An error occurred while running the capture.")
-				self.log.error(ex)
-				
-			finally:
-				strikes_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_STRIKES)
-			
-			
-			try:
-				if t >= time_wait:
-					m = self.constructMessage("TRAC", {"number_of_storms": number_of_storms})
-					self.mq.publishMessage(m[1], headers = m[0])
-				
-			except Exception, ex:
-				self.log.error("An error occurred while running the current time.")
-				self.log.error(ex)
-				
-			finally:
-				time_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_CURRENT_TIME)
+				finally:
+					graphs_wait = self.datetime.now() + self.timedelta(seconds = self.UPDATE_PERIOD_GRAPHS)
 			
 			
 			self.time.sleep(0.1)
@@ -295,27 +250,11 @@ class Plugin(PluginBase):
 			
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodCapture", str(self.UPDATE_PERIOD_CAPTURE))
+			var.setAttribute("UpdatePeriodStrikesGraphs", str(self.UPDATE_PERIOD_GRAPHS))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodCurrentTime", str(self.UPDATE_PERIOD_CURRENT_TIME))
-			settings.appendChild(var)
-			
-			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodEFM100", str(self.UPDATE_PERIOD_EFM100))
-			settings.appendChild(var)
-			
-			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodGraphs", str(self.UPDATE_PERIOD_GRAPHS))
-			settings.appendChild(var)
-			
-			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodLD250", str(self.UPDATE_PERIOD_LD250))
-			settings.appendChild(var)
-			
-			var = xmldoc.createElement("Setting")
-			var.setAttribute("UpdatePeriodStrikes", str(self.UPDATE_PERIOD_STRIKES))
+			var.setAttribute("UpdatePeriodStrikesPersistence", str(self.UPDATE_PERIOD_STRIKES_PERSISTENCE))
 			settings.appendChild(var)
 			
 			

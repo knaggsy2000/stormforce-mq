@@ -152,7 +152,7 @@ class Hardware(HardwareBase):
 							self.log.warn("Unable to update the database with the unit status.")
 							
 						else:
-							m = self.constructMessage(self.device.LD_STATUS, {"close_strikes": close_strikes, "total_strikes": total_strikes, "close_alarm": close_alarm, "severe_alarm": severe_alarm, "gps_heading": gps_heading})
+							m = self.constructMessage(self.device.LD_STATUS, {"CloseStrikes": close_strikes, "TotalStrikes": total_strikes, "CloseAlarm": close_alarm, "SevereAlarm": severe_alarm, "GPSHeading": gps_heading, "SquelchLevel": self.device.squelch})
 							self.mq.publishMessage(m[1], headers = m[0])
 				
 			elif sentence.startswith(self.device.LD_STRIKE):
@@ -197,7 +197,7 @@ class Hardware(HardwareBase):
 							self.log.warn("Unable to write the strike into the database.")
 							
 						else:
-							m = self.constructMessage(self.device.LD_STRIKE, {"screen_x": screen_x, "screen_y": screen_y, "strike_distance_corrected": strike_distance_corrected, "strike_distance": strike_distance, "strike_angle": strike_angle, "strike_type": strike_type, "strike_polarity": strike_polarity})
+							m = self.constructMessage(self.device.LD_STRIKE, {"ScreenX": screen_x, "ScreenY": screen_y, "StrikeDistanceCorrected": strike_distance_corrected, "StrikeDistance": strike_distance, "StrikeAngle": strike_angle, "StrikeType": strike_type, "StrikePolarity": strike_polarity})
 							self.mq.publishMessage(m[1], headers = m[0])
 						
 						

@@ -60,8 +60,6 @@ class Plugin(PluginBase):
 		
 		
 		self.MQ_RX_ENABLED = False
-		
-		self.running = True
 	
 	def readXMLSettings(self):
 		PluginBase.readXMLSettings(self)
@@ -86,10 +84,10 @@ class Plugin(PluginBase):
 		one_sec = self.datetime.now() + self.timedelta(seconds = 1)
 		
 		while self.running:
-			try:
-				t = self.datetime.now()
-				
-				if t >= one_sec:
+			t = self.datetime.now()
+			
+			if t >= one_sec:
+				try:
 					myconn = []
 					self.db.connectToDatabase(myconn)
 					
@@ -102,35 +100,36 @@ class Plugin(PluginBase):
 						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET CloseTotal = %(N)s, NoiseTotal = %(N)s, StrikesTotal = %(N)s, StrikesOutOfRange = %(N)s", {"N": 0}, myconn):
 							self.log.warn("Unable to write the zero noise total into the database.")
 					
-					# Reset the per minute counters
-					self.log.info("New minute has started, resetting minute counters...")
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET CloseMinute = %(N)s, NoiseMinute = %(N)s, StrikesMinute = %(N)s", {"N": 0}, myconn):
-						self.log.warn("Unable to write the zero noise minute into the database.")
-					
-					
-					# Reset counters if excessive
-					self.log.info("New minute has started, resetting counters if excessive...")
-					
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesMinute = %(StrikesMinute)s WHERE StrikesMinute > %(MaxStrikes)s", {"StrikesMinute": 0, "MaxStrikes": 999}, myconn):
-						self.log.warn("Unable to write the zero excessive strike minute into the database.")
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET NoiseMinute = %(NoiseMinute)s WHERE NoiseMinute > %(MaxNoise)s", {"NoiseMinute": 0, "MaxNoise": 999}, myconn):
-						self.log.warn("Unable to write the zero excessive noise minute into the database.")
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesOutOfRange = %(StrikesOutOfRange)s WHERE StrikesOutOfRange > %(MaxOOR)s", {"StrikesOutOfRange": 0, "MaxOOR": 999}, myconn):
-						self.log.warn("Unable to write the zero excessive strike out of range into the database.")
-					
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET CloseTotal = %(CloseTotal)s WHERE CloseTotal > %(MaxClose)s", {"CloseTotal": 0, "MaxClose": 999999}, myconn):
-						self.log.warn("Unable to write the zero excessive close total into the database.")
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET NoiseTotal = %(NoiseTotal)s WHERE NoiseTotal > %(MaxNoise)s", {"NoiseTotal": 0, "MaxNoise": 999999}, myconn):
-						self.log.warn("Unable to write the zero excessive noise total into the database.")
-					
-					if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesTotal = %(StrikesTotal)s WHERE StrikesTotal > %(MaxStrikes)s", {"StrikesTotal": 0, "MaxStrikes": 999999}, myconn):
-						self.log.warn("Unable to write the zero excessive strike total into the database.")
+					if t.second == 0:
+						# Reset the per minute counters
+						self.log.info("New minute has started, resetting minute counters...")
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET CloseMinute = %(N)s, NoiseMinute = %(N)s, StrikesMinute = %(N)s", {"N": 0}, myconn):
+							self.log.warn("Unable to write the zero noise minute into the database.")
+						
+						
+						# Reset counters if excessive
+						self.log.info("New minute has started, resetting counters if excessive...")
+						
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesMinute = %(StrikesMinute)s WHERE StrikesMinute > %(MaxStrikes)s", {"StrikesMinute": 0, "MaxStrikes": 999}, myconn):
+							self.log.warn("Unable to write the zero excessive strike minute into the database.")
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET NoiseMinute = %(NoiseMinute)s WHERE NoiseMinute > %(MaxNoise)s", {"NoiseMinute": 0, "MaxNoise": 999}, myconn):
+							self.log.warn("Unable to write the zero excessive noise minute into the database.")
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesOutOfRange = %(StrikesOutOfRange)s WHERE StrikesOutOfRange > %(MaxOOR)s", {"StrikesOutOfRange": 0, "MaxOOR": 999}, myconn):
+							self.log.warn("Unable to write the zero excessive strike out of range into the database.")
+						
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET CloseTotal = %(CloseTotal)s WHERE CloseTotal > %(MaxClose)s", {"CloseTotal": 0, "MaxClose": 999999}, myconn):
+							self.log.warn("Unable to write the zero excessive close total into the database.")
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET NoiseTotal = %(NoiseTotal)s WHERE NoiseTotal > %(MaxNoise)s", {"NoiseTotal": 0, "MaxNoise": 999999}, myconn):
+							self.log.warn("Unable to write the zero excessive noise total into the database.")
+						
+						if not self.db.executeSQLCommand("UPDATE tblStrikeCounter SET StrikesTotal = %(StrikesTotal)s WHERE StrikesTotal > %(MaxStrikes)s", {"StrikesTotal": 0, "MaxStrikes": 999999}, myconn):
+							self.log.warn("Unable to write the zero excessive strike total into the database.")
 					
 					
 					# Send out the current counters out
@@ -140,22 +139,22 @@ class Plugin(PluginBase):
 					rows = self.db.executeSQLQuery("SELECT CloseMinute, CloseTotal, NoiseMinute, NoiseTotal, StrikesMinute, StrikesTotal, StrikesOutOfRange FROM tblStrikeCounter LIMIT 1", conn = myconn)
 					
 					for row in rows:
-						m = self.constructMessage("StrikeCounters", {"close_minute": row[0], "close_total": row[1], "noise_minute": row[2], "noise_total": row[3], "strikes_minute": row[4], "strikes_total": row[5], "strikes_out_of_range": row[6]})
+						m = self.constructMessage("StrikeCounters", {"CloseMinute": row[0], "CloseTotal": row[1], "NoiseMinute": row[2], "NoiseTotal": row[3], "StrikesMinute": row[4], "StrikesTotal": row[5], "StrikesOutOfRange": row[6]})
 						self.mq.publishMessage(m[1], headers = m[0])
 						break
 					
 					
 					self.db.disconnectFromDatabase(myconn)
+				
+				except Exception, ex:
+					self.log.error("An error occurred while updating the strike counters.")
+					self.log.error(ex)
 					
-					
+				finally:
 					one_sec = self.datetime.now() + self.timedelta(seconds = 1)
-				
-			except Exception, ex:
-				self.log.error("An error occurred while updating the strike counters.")
-				self.log.error(ex)
-				
-			finally:
-				self.time.sleep(0.1)
+			
+			
+			self.time.sleep(0.1)
 	
 	def start(self):
 		PluginBase.start(self)
@@ -163,6 +162,7 @@ class Plugin(PluginBase):
 		
 		if self.ENABLED:
 			self.log.info("Starting stike counters...")
+			self.running = True
 			
 			
 			myconn = []

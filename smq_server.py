@@ -45,7 +45,7 @@
 ###################################################
 # StormForce MQ Server                            #
 ###################################################
-# Version:     v0.1.0                             #
+# Version:     v0.1.1                             #
 ###################################################
 
 from danlog import DanLog
@@ -69,7 +69,7 @@ class SMQServer():
 		self.db = None # Initialised in main()
 		self.datetime = datetime
 		self.hardware = []
-		self.log = DanLog("SFC")
+		self.log = DanLog("SMQServer")
 		self.minidom = minidom
 		self.mq = None # Initialised in main()
 		self.os = os
@@ -102,7 +102,7 @@ class SMQServer():
 		
 		self.SERVER_COPYRIGHT = "(c)2008-2012, 2014, 2016 - Daniel Knaggs"
 		self.SERVER_NAME = "StormForce MQ"
-		self.SERVER_VERSION = "0.1.0"
+		self.SERVER_VERSION = "0.1.1"
 		self.STRIKE_COPYRIGHT = "Lightning Data (c) {:d} - Daniel Knaggs".format(self.datetime.now().year)
 		
 		self.XML_SETTINGS_FILE = "smqserver-settings.xml"
@@ -221,38 +221,6 @@ class SMQServer():
 		self.mq = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, None)
 		
 		
-		self.log.info("Configuring hardware...")
-		self.sys.path.append("hardware")
-		
-		for root, dirs, files in self.os.walk("hardware", topdown = False):
-			files.sort()
-			
-			for f in files:
-				fs = self.os.path.splitext(f)
-				
-				if fs[0] <> "hardware_core_base" and fs[1] == ".py":
-					try:
-						self.log.info("Configuring hardware {0}...".format(f))
-						
-						
-						p = __import__("{0}".format(fs[0])).Hardware(fs[0], self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD, self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_EVENTS_HARDWARE, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO)
-						p.start()
-						
-						if p.ENABLED:
-							self.hardware.append(p)
-							
-							self.log.info("Hardware {0} has been started successfully.".format(f))
-							
-						else:
-							self.log.warn("Hardware {0} is currently disabled.".format(f))
-						
-					except Exception, ex:
-						self.log.error("An error has occurred while initialising hardware {0}.".format(f))
-						self.log.error(ex)
-			
-			break
-		
-		
 		self.log.info("Configuring plugins...")
 		self.sys.path.append("plugins")
 		
@@ -285,17 +253,48 @@ class SMQServer():
 			break
 		
 		
+		self.log.info("Configuring hardware...")
+		self.sys.path.append("hardware")
 		
-		self.log.info("Hardware enabled ({:d}): -".format(len(self.hardware)))
-		
-		for p in self.hardware:
-			self.log.info("    {0}".format(p.HARDWARE_FILENAME))
+		for root, dirs, files in self.os.walk("hardware", topdown = False):
+			files.sort()
+			
+			for f in files:
+				fs = self.os.path.splitext(f)
+				
+				if fs[0] <> "hardware_core_base" and fs[1] == ".py":
+					try:
+						self.log.info("Configuring hardware {0}...".format(f))
+						
+						
+						p = __import__("{0}".format(fs[0])).Hardware(fs[0], self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD, self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_EVENTS_HARDWARE, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO)
+						p.start()
+						
+						if p.ENABLED:
+							self.hardware.append(p)
+							
+							self.log.info("Hardware {0} has been started successfully.".format(f))
+							
+						else:
+							self.log.warn("Hardware {0} is currently disabled.".format(f))
+						
+					except Exception, ex:
+						self.log.error("An error has occurred while initialising hardware {0}.".format(f))
+						self.log.error(ex)
+			
+			break
 		
 		
 		self.log.info("Plugins enabled ({:d}): -".format(len(self.plugins)))
 		
 		for p in self.plugins:
 			self.log.info("    {0}".format(p.PLUGIN_FILENAME))
+		
+		
+		self.log.info("Hardware enabled ({:d}): -".format(len(self.hardware)))
+		
+		for p in self.hardware:
+			self.log.info("    {0}".format(p.HARDWARE_FILENAME))
 		
 		
 		self.log.info("Backgrounding...")
@@ -378,34 +377,6 @@ class SMQServer():
 		
 		if rowcount == 0:
 			self.db.executeSQLCommand("INSERT INTO tblSystem(DatabaseVersion) VALUES(%(DatabaseVersion)s)", {"DatabaseVersion": 0}, myconn)
-		
-		
-		# tblUnitStatus
-		self.log.debug("TABLE: tblUnitStatus")
-		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblUnitStatus CASCADE", conn = myconn)
-		self.db.executeSQLCommand("CREATE TABLE tblUnitStatus(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN Hardware varchar(20)", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN SquelchLevel smallint", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN UseUncorrectedStrikes boolean", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN CloseAlarm boolean", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN SevereAlarm boolean", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblUnitStatus ADD COLUMN ReceiverLastDetected timestamp", conn = myconn)
-		
-		
-		
-		#########
-		# Views #
-		#########
-		self.log.info("Creating views...")
-		
-		
-		self.db.executeSQLCommand("DROP VIEW IF EXISTS vwUnitStatus CASCADE", conn = myconn)
-		
-		
-		self.log.debug("VIEW: vwUnitStatus")
-		self.db.executeSQLCommand("""CREATE VIEW vwUnitStatus AS
-SELECT ID, Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected, (CASE WHEN ReceiverLastDetected IS NULL THEN TRUE ELSE (CASE WHEN EXTRACT(epoch from (LOCALTIMESTAMP - ReceiverLastDetected)) >= 5 THEN TRUE ELSE FALSE END) END) AS ReceiverLost
-FROM tblUnitStatus""", conn = myconn)
 		
 		
 		
