@@ -54,25 +54,29 @@ from smq_shared import MQ
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
-		self.MQ_DURABLE = True # Fixed
-		self.MQ_EXCHANGE_NAME = "Exchange.To.Repeater"
-		self.MQ_EXCHANGE_TYPE = "topic" # Fixed
-		self.MQ_HOSTNAME = "localhost"
-		self.MQ_NO_ACK_MESSAGES = False # Fixed
-		self.MQ_PASSWORD = "guest"
-		self.MQ_PORT = 5672
-		self.MQ_REPLY_TO = "" # Fixed
-		self.MQ_ROUTING_KEY = "" # Fixed
-		self.MQ_USERNAME = "guest"
-		self.MQ_VIRTUAL_HOST = "/"
+	def __init__(self):
+		self.MQC_DURABLE = True # Fixed
+		self.MQC_EXCHANGE_NAME = "Exchange.To.Repeater"
+		self.MQC_EXCHANGE_TYPE = "topic" # Fixed
+		self.MQC_HOSTNAME = "localhost"
+		self.MQC_NO_ACK_MESSAGES = False # Fixed
+		self.MQC_PASSWORD = "guest"
+		self.MQC_PORT = 5672
+		self.MQC_REPLY_TO = "" # Fixed
+		self.MQC_ROUTING_KEY = "" # Fixed
+		self.MQC_USERNAME = "guest"
+		self.MQC_VIRTUAL_HOST = "/"
 		
 		
-		mq_routing_key = "events.#"
+		PluginBase.__init__(self)
 		
-		PluginBase.__init__(self, filename, "Repeater", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+		self.MQ_ROUTING_KEY = "events.#"
 		
-		self.mqc = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, None)
+		
+		self.mqc = MQ(self.MQC_HOSTNAME, self.MQC_PORT, self.MQC_USERNAME, self.MQC_PASSWORD, self.MQC_VIRTUAL_HOST, self.MQC_EXCHANGE_NAME, self.MQC_EXCHANGE_TYPE, self.MQC_ROUTING_KEY, self.MQC_DURABLE, self.MQC_NO_ACK_MESSAGES, self.MQC_REPLY_TO, None)
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def onEventReceived(self, basic_deliver, properties, body):
 		PluginBase.onEventReceived(self, basic_deliver, properties, body)
@@ -101,22 +105,22 @@ class Plugin(PluginBase):
 						self.ENABLED = self.cBool(val)
 						
 					elif key == "MQHostname":
-						self.MQ_HOSTNAME = val
+						self.MQC_HOSTNAME = val
 						
 					elif key == "MQPort":
-						self.MQ_PORT = int(val)
+						self.MQC_PORT = int(val)
 						
 					elif key == "MQUsername":
-						self.MQ_USERNAME = val
+						self.MQC_USERNAME = val
 						
 					elif key == "MQPassword":
-						self.MQ_PASSWORD = val
+						self.MQC_PASSWORD = val
 						
 					elif key == "MQVirtualHost":
-						self.MQ_VIRTUAL_HOST = val
+						self.MQC_VIRTUAL_HOST = val
 						
 					elif key == "MQExchangeName":
-						self.MQ_EXCHANGE_NAME = val
+						self.MQC_EXCHANGE_NAME = val
 	
 	def writeXMLSettings(self):
 		PluginBase.writeXMLSettings(self)
@@ -134,30 +138,44 @@ class Plugin(PluginBase):
 			
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQHostname", str(self.MQ_HOSTNAME))
+			var.setAttribute("MQHostname", str(self.MQC_HOSTNAME))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQPort", str(self.MQ_PORT))
+			var.setAttribute("MQPort", str(self.MQC_PORT))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQUsername", str(self.MQ_USERNAME))
+			var.setAttribute("MQUsername", str(self.MQC_USERNAME))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQPassword", str(self.MQ_PASSWORD))
+			var.setAttribute("MQPassword", str(self.MQC_PASSWORD))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQVirtualHost", str(self.MQ_VIRTUAL_HOST))
+			var.setAttribute("MQVirtualHost", str(self.MQC_VIRTUAL_HOST))
 			settings.appendChild(var)
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("MQExchangeName", str(self.MQ_EXCHANGE_NAME))
+			var.setAttribute("MQExchangeName", str(self.MQC_EXCHANGE_NAME))
 			settings.appendChild(var)
 			
 			
 			xmloutput = file(self.XML_SETTINGS_FILE, "w")
 			xmloutput.write(xmldoc.toprettyxml())
 			xmloutput.close()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

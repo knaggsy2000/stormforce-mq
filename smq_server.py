@@ -45,16 +45,79 @@
 ###################################################
 # StormForce MQ Server                            #
 ###################################################
-# Version:     v0.1.1                             #
+# Version:     v0.2.0                             #
 ###################################################
 
 from danlog import DanLog
-from smq_shared import *
+from smq_shared import Database, MQ
 
 
 ###########
 # Classes #
 ###########
+class SMQExtensible():
+	def __init__(self, path, name):
+		import os
+		import sys
+		
+		
+		self.name = name
+		self.os = os
+		self.path = path
+		self.plugin = None
+		self.sys = sys
+		
+	def start(self):
+		self.sys.path.append("hardware")
+		self.sys.path.append("plugins")
+		
+	def stop(self):
+		if self.plugin is not None:
+			self.plugin.stop()
+
+class SMQExtensibleAsProcess():
+	def __init__(self, path, name):
+		import os
+		import subprocess
+		
+		
+		self.name = name
+		self.os = os
+		self.path = path
+		self.plugin = None
+		self.subprocess = subprocess
+		
+	def start(self):
+		self.plugin = self.subprocess.Popen(["python", self.os.path.join(self.path, self.name)])
+		
+	def stop(self):
+		if self.plugin is not None:
+			self.plugin.terminate()
+
+class SMQHardware(SMQExtensible):
+	def start(self):
+		SMQExtensible.start(self)
+		
+		
+		self.plugin = __import__("{0}".format(self.os.path.splitext(self.name)[0])).Hardware()
+		self.plugin.start()
+
+class SMQHardwareAsProcess(SMQExtensibleAsProcess):
+	def start(self):
+		SMQExtensibleAsProcess.start(self)
+
+class SMQPlugin(SMQExtensible):
+	def start(self):
+		SMQExtensible.start(self)
+		
+		
+		self.plugin = __import__("{0}".format(self.os.path.splitext(self.name)[0])).Plugin()
+		self.plugin.start()
+
+class SMQPluginAsProcess(SMQExtensibleAsProcess):
+	def start(self):
+		SMQExtensibleAsProcess.start(self)
+
 class SMQServer():
 	def __init__(self):
 		from datetime import datetime
@@ -71,7 +134,6 @@ class SMQServer():
 		self.hardware = []
 		self.log = DanLog("SMQServer")
 		self.minidom = minidom
-		self.mq = None # Initialised in main()
 		self.os = os
 		self.plugins = []
 		self.sys = sys
@@ -80,6 +142,8 @@ class SMQServer():
 		
 		
 		self.DB_VERSION = 1000
+		
+		self.HARDWARE_AS_PROCESS = False
 		
 		self.MQ_DURABLE = True # Fixed
 		self.MQ_EVENTS_HARDWARE = "events.hardware"
@@ -95,15 +159,11 @@ class SMQServer():
 		self.MQ_USERNAME = "guest"
 		self.MQ_VIRTUAL_HOST = "/"
 		
+		self.PLUGINS_AS_PROCESS = False
 		self.POSTGRESQL_DATABASE = "stormforce_mq"
 		self.POSTGRESQL_PASSWORD = ""
 		self.POSTGRESQL_SERVER = "localhost"
 		self.POSTGRESQL_USERNAME = "stormforce"
-		
-		self.SERVER_COPYRIGHT = "(c)2008-2012, 2014, 2016 - Daniel Knaggs"
-		self.SERVER_NAME = "StormForce MQ"
-		self.SERVER_VERSION = "0.1.1"
-		self.STRIKE_COPYRIGHT = "Lightning Data (c) {:d} - Daniel Knaggs".format(self.datetime.now().year)
 		
 		self.XML_SETTINGS_FILE = "smqserver-settings.xml"
 	
@@ -217,12 +277,12 @@ class SMQServer():
 		self.updateDatabase()
 		
 		
-		self.log.info("Setting up MQ...")
-		self.mq = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, None)
+		self.log.info("Creating extensible settings...")
+		self.xmlExtensibleWrite("hardware")
+		self.xmlExtensibleWrite("plugins")
 		
 		
 		self.log.info("Configuring plugins...")
-		self.sys.path.append("plugins")
 		
 		for root, dirs, files in self.os.walk("plugins", topdown = False):
 			files.sort()
@@ -235,16 +295,29 @@ class SMQServer():
 						self.log.info("Configuring plugin {0}...".format(f))
 						
 						
-						p = __import__("{0}".format(fs[0])).Plugin(fs[0], self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD, self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_EVENTS_PLUGIN, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO)
+						p = None
+						
+						if self.PLUGINS_AS_PROCESS:
+							p = SMQPluginAsProcess(root, f)
+							
+						else:
+							p = SMQPlugin(root, f)
+						
 						p.start()
 						
-						if p.ENABLED:
+						if self.PLUGINS_AS_PROCESS:
 							self.plugins.append(p)
 							
 							self.log.info("Plugin {0} has been started successfully.".format(f))
 							
 						else:
-							self.log.warn("Plugin {0} is currently disabled.".format(f))
+							if p.plugin.ENABLED:
+								self.plugins.append(p)
+								
+								self.log.info("Plugin {0} has been started successfully.".format(f))
+								
+							else:
+								self.log.warn("Plugin {0} is currently disabled.".format(f))
 						
 					except Exception, ex:
 						self.log.error("An error has occurred while initialising plugin {0}.".format(f))
@@ -254,7 +327,6 @@ class SMQServer():
 		
 		
 		self.log.info("Configuring hardware...")
-		self.sys.path.append("hardware")
 		
 		for root, dirs, files in self.os.walk("hardware", topdown = False):
 			files.sort()
@@ -267,16 +339,29 @@ class SMQServer():
 						self.log.info("Configuring hardware {0}...".format(f))
 						
 						
-						p = __import__("{0}".format(fs[0])).Hardware(fs[0], self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD, self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_EVENTS_HARDWARE, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO)
+						p = None
+						
+						if self.HARDWARE_AS_PROCESS:
+							p = SMQHardwareAsProcess(root, f)
+							
+						else:
+							p = SMQHardware(root, f)
+						
 						p.start()
 						
-						if p.ENABLED:
+						if self.HARDWARE_AS_PROCESS:
 							self.hardware.append(p)
 							
 							self.log.info("Hardware {0} has been started successfully.".format(f))
 							
 						else:
-							self.log.warn("Hardware {0} is currently disabled.".format(f))
+							if p.plugin.ENABLED:
+								self.hardware.append(p)
+								
+								self.log.info("Hardware {0} has been started successfully.".format(f))
+								
+							else:
+								self.log.warn("Hardware {0} is currently disabled.".format(f))
 						
 					except Exception, ex:
 						self.log.error("An error has occurred while initialising hardware {0}.".format(f))
@@ -288,25 +373,34 @@ class SMQServer():
 		self.log.info("Plugins enabled ({:d}): -".format(len(self.plugins)))
 		
 		for p in self.plugins:
-			self.log.info("    {0}".format(p.PLUGIN_FILENAME))
+			if self.PLUGINS_AS_PROCESS:
+				self.log.info("    {0}".format(p.name))
+				
+			else:
+				self.log.info("    {0}".format(p.plugin.PLUGIN_FILENAME))
 		
 		
 		self.log.info("Hardware enabled ({:d}): -".format(len(self.hardware)))
 		
 		for p in self.hardware:
-			self.log.info("    {0}".format(p.HARDWARE_FILENAME))
+			if self.HARDWARE_AS_PROCESS:
+				self.log.info("    {0}".format(p.name))
+				
+			else:
+				self.log.info("    {0}".format(p.plugin.PLUGIN_FILENAME))
 		
 		
 		self.log.info("Backgrounding...")
 		
 		try:
-			while True:
+			while len(self.hardware) > 0 or len(self.plugins) > 0:
 				self.time.sleep(1.)
 			
 		except KeyboardInterrupt:
 			pass
 			
 		except Exception, ex:
+			self.log.error("An error has occurred while running in the background.")
 			self.log.error(ex)
 			
 		finally:
@@ -317,7 +411,11 @@ class SMQServer():
 			
 			for p in self.hardware:
 				try:
-					self.log.info("Stopping hardware {0}...".format(p.HARDWARE_FILENAME))
+					if self.HARDWARE_AS_PROCESS:
+						self.log.info("Stopping hardware {0}...".format(p.name))
+						
+					else:
+						self.log.info("Stopping hardware {0}...".format(p.plugin.PLUGIN_FILENAME))
 					
 					p.stop()
 					
@@ -330,7 +428,11 @@ class SMQServer():
 			
 			for p in self.plugins:
 				try:
-					self.log.info("Stopping plugin {0}...".format(p.PLUGIN_FILENAME))
+					if self.PLUGINS_AS_PROCESS:
+						self.log.info("Stopping plugin {0}...".format(p.name))
+						
+					else:
+						self.log.info("Stopping plugin {0}...".format(p.plugin.PLUGIN_FILENAME))
 					
 					p.stop()
 					
@@ -353,19 +455,6 @@ class SMQServer():
 		# Tables #
 		##########
 		self.log.info("Creating tables...")
-		
-		
-		# tblServerDetails
-		self.log.debug("TABLE: tblServerDetails")
-		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblServerDetails CASCADE", conn = myconn)
-		self.db.executeSQLCommand("CREATE TABLE tblServerDetails(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
-		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerStarted timestamp", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerApplication varchar(20)", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerCopyright varchar(100)", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerVersion varchar(8)", conn = myconn)
-		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN StrikeCopyright varchar(100)", conn = myconn)
-		
-		self.db.executeSQLCommand("INSERT INTO tblServerDetails(ServerStarted, ServerApplication, ServerCopyright, ServerVersion, StrikeCopyright) VALUES(LOCALTIMESTAMP, %(ServerApplication)s, %(ServerCopyright)s, %(ServerVersion)s, %(StrikeCopyright)s)", {"ServerApplication": self.SERVER_NAME, "ServerCopyright": self.SERVER_COPYRIGHT, "ServerVersion": self.SERVER_VERSION, "StrikeCopyright": self.STRIKE_COPYRIGHT}, myconn)
 		
 		
 		# tblSystem
@@ -398,6 +487,96 @@ class SMQServer():
 		
 		self.db.disconnectFromDatabase(myconn)
 	
+	def xmlExtensibleWrite(self, folder):
+		self.log.debug("Starting...")
+		
+		
+		f = self.os.path.join(folder, "smq_extensible.xml")
+		
+		if self.os.path.exists(f):
+			self.os.unlink(f)
+		
+		if not self.os.path.exists(f):
+			xmldoc = self.minidom.Document()
+			
+			# Create header
+			settings = xmldoc.createElement("SMQExtensible")
+			xmldoc.appendChild(settings)
+			
+			# Write each of the details one at a time, makes it easier for someone to alter the file using a text editor
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("PostgreSQLServer", str(self.POSTGRESQL_SERVER))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("PostgreSQLDatabase", str(self.POSTGRESQL_DATABASE))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("PostgreSQLUsername", str(self.POSTGRESQL_USERNAME))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("PostgreSQLPassword", str(self.POSTGRESQL_PASSWORD))
+			settings.appendChild(var)
+			
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQDurable", str(self.MQ_DURABLE))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQExchangeName", str(self.MQ_EXCHANGE_NAME))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQExchangeType", str(self.MQ_EXCHANGE_TYPE))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQHostname", str(self.MQ_HOSTNAME))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQNoAckMessages", str(self.MQ_NO_ACK_MESSAGES))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQPassword", str(self.MQ_PASSWORD))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQPort", str(self.MQ_PORT))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQReplyTo", str(self.MQ_REPLY_TO))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			
+			if folder.lower() == "hardware":
+				var.setAttribute("MQRoutingKey", str(self.MQ_EVENTS_HARDWARE))
+				
+			else:
+				var.setAttribute("MQRoutingKey", str(self.MQ_EVENTS_PLUGIN))
+			
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQUsername", str(self.MQ_USERNAME))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("MQVirtualHost", str(self.MQ_VIRTUAL_HOST))
+			settings.appendChild(var)
+			
+			
+			# Finally, save to the file
+			xmloutput = file(f, "w")
+			xmloutput.write(xmldoc.toprettyxml())
+			xmloutput.close()
+	
 	def xmlSettingsRead(self):
 		self.log.debug("Starting...")
 		
@@ -424,9 +603,6 @@ class SMQServer():
 					elif key == "PostgreSQLUsername":
 						self.POSTGRESQL_USERNAME = val
 						
-					elif key == "StrikeCopyright":
-						self.STRIKE_COPYRIGHT = val
-						
 					elif key == "MQHostname":
 						self.MQ_HOSTNAME = val
 						
@@ -444,6 +620,12 @@ class SMQServer():
 						
 					elif key == "MQExchangeName":
 						self.MQ_EXCHANGE_NAME = val
+						
+					elif key == "HardwareAsProcess":
+						self.HARDWARE_AS_PROCESS = self.cBool(val)
+						
+					elif key == "PluginsAsProcess":
+						self.PLUGINS_AS_PROCESS = self.cBool(val)
 						
 					else:
 						self.log.warn("XML setting attribute \"{0}\" isn't known.  Ignoring...".format(key))
@@ -503,7 +685,11 @@ class SMQServer():
 			
 			
 			var = xmldoc.createElement("Setting")
-			var.setAttribute("StrikeCopyright", str(self.STRIKE_COPYRIGHT))
+			var.setAttribute("HardwareAsProcess", str(self.HARDWARE_AS_PROCESS))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
+			var.setAttribute("PluginsAsProcess", str(self.PLUGINS_AS_PROCESS))
 			settings.appendChild(var)
 			
 			

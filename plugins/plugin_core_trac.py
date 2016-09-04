@@ -53,20 +53,23 @@ from plugin_core_base import PluginBase
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
-		mq_routing_key = "{0}.core.trac".format(mq_routing_key)
-		
-		PluginBase.__init__(self, filename, "TRAC", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
-		
-		
-		self.MAP_MATRIX_SIZE = (600, 600)
-		self.MQ_RX_ENABLED = False
-		
+	def __init__(self):
 		self.TRAC_DETECTION_METHOD = 1
 		self.TRAC_SENSITIVITY = 5
 		self.TRAC_STORM_WIDTH = 30 # miles
 		self.TRAC_UPDATE_TIME = 15. # seconds
 		self.TRAC_VERSION = "0.4.1"
+		
+		
+		PluginBase.__init__(self)
+		
+		
+		self.MAP_MATRIX_SIZE = (600, 600)
+		self.MQ_ROUTING_KEY = "{0}.core.trac".format(self.MQ_ROUTING_KEY)
+		self.MQ_RX_ENABLED = False
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		PluginBase.readXMLSettings(self)
@@ -150,49 +153,68 @@ class Plugin(PluginBase):
 			
 			self.time.sleep(0.1)
 	
-	def start(self):
-		PluginBase.start(self)
+	def start(self, use_threading = True):
+		PluginBase.start(self, use_threading)
 		
 		
 		if self.ENABLED:
-			self.log.info("Setting up TRAC...")
+			self.log.info("Starting TRAC...")
+			self.running = True
 			
-			
-			myconn = []
-			self.db.connectToDatabase(myconn)
-			
-			
-			##########
-			# Tables #
-			##########
-			self.log.info("Creating tables...")
-			
-			
-			# tblTRACDetails
-			self.log.debug("TABLE: tblTRACDetails")
-			self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACDetails"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "HeaderID", "bigint"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "DateTimeOfReading", "timestamp"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "DateTimeOfLastStrike", "timestamp"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "CurrentStrikeRate", "int"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "TotalStrikes", "int"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "Intensity", "varchar(12)"), conn = myconn)
-			
-			
-			# tblTRACGrid
-			self.log.debug("TABLE: tblTRACGrid")
-			self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACGrid"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "X", "smallint"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "Y", "smallint"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "Counter", "int"), conn = myconn)
-			
-			rowcount = int(self.ifNoneReturnZero(self.db.danLookup("COUNT(ID)", "tblTRACGrid", "", conn = myconn)))
-			
-			if rowcount < 360000:
-				self.log.warn("The TRAC grid hasn't been populated (or is invalid), this may take a while to build (%d)..." % rowcount)
+			if use_threading:
+				t = self.threading.Thread(target = self.run)
+				t.setDaemon(1)
+				t.start()
 				
-				
-				self.db.executeSQLCommand("""
+			else:
+				self.run()
+	
+	def stop(self):
+		PluginBase.stop(self)
+		
+		
+		if self.ENABLED:
+			self.running = False
+	
+	def updateDatabase(self):
+		PluginBase.updateDatabase(self)
+		
+		
+		myconn = []
+		self.db.connectToDatabase(myconn)
+		
+		
+		##########
+		# Tables #
+		##########
+		self.log.info("Creating tables...")
+		
+		
+		# tblTRACDetails
+		self.log.debug("TABLE: tblTRACDetails")
+		self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACDetails"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "HeaderID", "bigint"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "DateTimeOfReading", "timestamp"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "DateTimeOfLastStrike", "timestamp"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "CurrentStrikeRate", "int"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "TotalStrikes", "int"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACDetails", "Intensity", "varchar(12)"), conn = myconn)
+		
+		
+		# tblTRACGrid
+		self.log.debug("TABLE: tblTRACGrid")
+		self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACGrid"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "X", "smallint"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "Y", "smallint"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACGrid", "Counter", "int"), conn = myconn)
+		
+		rowcount = int(self.ifNoneReturnZero(self.db.danLookup("COUNT(ID)", "tblTRACGrid", "", conn = myconn)))
+		
+		if rowcount < 360000:
+			self.log.warn("The TRAC grid hasn't been populated (or is invalid), this may take a while to build (%d)..." % rowcount)
+			
+			
+			self.db.executeSQLCommand("""
 DO $$
 	BEGIN
 		DELETE FROM tblTRACGrid;
@@ -205,84 +227,84 @@ DO $$
 	END
 $$
 """ % (self.MAP_MATRIX_SIZE[1] - 1, self.MAP_MATRIX_SIZE[0] - 1), conn = myconn)
-				
-			else:
-				self.db.executeSQLCommand("UPDATE tblTRACGrid SET Counter = 0 WHERE Counter <> 0", conn = myconn)
 			
-			
-			# tblTRACHeader
-			self.log.debug("TABLE: tblTRACHeader")
-			self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACHeader"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "GID", "varchar(40)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "CRC32", "varchar(8)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "DateTimeOfDiscovery", "timestamp"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "Bearing", "decimal(10,5)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "Distance", "decimal(10,5)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "DetectionMethod", "smallint"), conn = myconn)
-			
-			
-			# tblTRACStatus
-			self.log.debug("TABLE: tblTRACStatus")
-			self.db.executeSQLCommand("DROP TABLE IF EXISTS tblTRACStatus", conn = myconn)
-			self.db.executeSQLCommand("CREATE TABLE tblTRACStatus(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Version varchar(6)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN DetectionMethod smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Active boolean", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN NumberOfStorms smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN MostActive varchar(14)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN MostActiveDistance decimal(10,5)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Closest varchar(14)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN ClosestDistance decimal(10,5)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Width smallint", conn = myconn)
-			
-			self.db.executeSQLCommand("INSERT INTO tblTRACStatus(Version, DetectionMethod, Active, NumberOfStorms, MostActive, MostActiveDistance, Closest, ClosestDistance, Width) VALUES(%(Version)s, %(DetectionMethod)s, %(Active)s, %(NumberOfStorms)s, %(MostActive)s, %(MostActiveDistance)s, %(Closest)s, %(ClosestDistance)s, %(Width)s)", {"Version": self.TRAC_VERSION, "DetectionMethod": self.TRAC_DETECTION_METHOD, "Active": False, "NumberOfStorms": 0, "MostActive": "", "MostActiveDistance": 0, "Closest": "", "ClosestDistance": 0, "Width": self.TRAC_STORM_WIDTH}, myconn)
-			
-			
-			# tblTRACStorms
-			self.log.debug("TABLE: tblTRACStorms")
-			self.db.executeSQLCommand("DROP TABLE IF EXISTS tblTRACStorms CASCADE", conn = myconn)
-			self.db.executeSQLCommand("CREATE TABLE tblTRACStorms(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN X smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Y smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN XOffset smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN YOffset smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Name varchar(14)", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Intensity smallint", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Distance decimal(10,5)", conn = myconn)
-			
-			
-			
-			#########
-			# Views #
-			#########
-			self.log.info("Creating views...")
-			
-			
-			self.db.executeSQLCommand("DROP VIEW IF EXISTS vwTRACPersistence CASCADE", conn = myconn)
-			self.db.executeSQLCommand("DROP VIEW IF EXISTS vwTRACStrikesPeak CASCADE", conn = myconn)
-			
-			self.log.debug("VIEW: vwTRACPersistence")
-			self.db.executeSQLCommand("""CREATE VIEW vwTRACPersistence AS
+		else:
+			self.db.executeSQLCommand("UPDATE tblTRACGrid SET Counter = 0 WHERE Counter <> 0", conn = myconn)
+		
+		
+		# tblTRACHeader
+		self.log.debug("TABLE: tblTRACHeader")
+		self.db.executeSQLCommand(self.db.createTableSQLString("tblTRACHeader"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "GID", "varchar(40)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "CRC32", "varchar(8)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "DateTimeOfDiscovery", "timestamp"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "Bearing", "decimal(10,5)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "Distance", "decimal(10,5)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblTRACHeader", "DetectionMethod", "smallint"), conn = myconn)
+		
+		
+		# tblTRACStatus
+		self.log.debug("TABLE: tblTRACStatus")
+		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblTRACStatus", conn = myconn)
+		self.db.executeSQLCommand("CREATE TABLE tblTRACStatus(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Version varchar(6)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN DetectionMethod smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Active boolean", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN NumberOfStorms smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN MostActive varchar(14)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN MostActiveDistance decimal(10,5)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Closest varchar(14)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN ClosestDistance decimal(10,5)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStatus ADD COLUMN Width smallint", conn = myconn)
+		
+		self.db.executeSQLCommand("INSERT INTO tblTRACStatus(Version, DetectionMethod, Active, NumberOfStorms, MostActive, MostActiveDistance, Closest, ClosestDistance, Width) VALUES(%(Version)s, %(DetectionMethod)s, %(Active)s, %(NumberOfStorms)s, %(MostActive)s, %(MostActiveDistance)s, %(Closest)s, %(ClosestDistance)s, %(Width)s)", {"Version": self.TRAC_VERSION, "DetectionMethod": self.TRAC_DETECTION_METHOD, "Active": False, "NumberOfStorms": 0, "MostActive": "", "MostActiveDistance": 0, "Closest": "", "ClosestDistance": 0, "Width": self.TRAC_STORM_WIDTH}, myconn)
+		
+		
+		# tblTRACStorms
+		self.log.debug("TABLE: tblTRACStorms")
+		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblTRACStorms CASCADE", conn = myconn)
+		self.db.executeSQLCommand("CREATE TABLE tblTRACStorms(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN X smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Y smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN XOffset smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN YOffset smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Name varchar(14)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Intensity smallint", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblTRACStorms ADD COLUMN Distance decimal(10,5)", conn = myconn)
+		
+		
+		
+		#########
+		# Views #
+		#########
+		self.log.info("Creating views...")
+		
+		
+		self.db.executeSQLCommand("DROP VIEW IF EXISTS vwTRACPersistence CASCADE", conn = myconn)
+		self.db.executeSQLCommand("DROP VIEW IF EXISTS vwTRACStrikesPeak CASCADE", conn = myconn)
+		
+		self.log.debug("VIEW: vwTRACPersistence")
+		self.db.executeSQLCommand("""CREATE VIEW vwTRACPersistence AS
 SELECT ID, X, Y, DateTimeOfStrike, EXTRACT(epoch from (LOCALTIMESTAMP - DateTimeOfStrike)) AS StrikeAge
 FROM tblLD250Strikes
 WHERE DateTimeOfStrike >= LOCALTIMESTAMP - INTERVAL '30 MINUTES' AND DateTimeOfStrike >= (SELECT ServerStarted FROM tblServerDetails LIMIT 1)""", conn = myconn)
 		
-			self.log.debug("VIEW: vwTRACStrikesPeak")
-			self.db.executeSQLCommand("""CREATE VIEW vwTRACStrikesPeak AS
+		self.log.debug("VIEW: vwTRACStrikesPeak")
+		self.db.executeSQLCommand("""CREATE VIEW vwTRACStrikesPeak AS
 SELECT COUNT(ID) AS StrikeCount, CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp) AS PeakTime, MIN(X) AS MinX, MIN(Y) AS MinY
 FROM vwTRACPersistence
 GROUP BY CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp)""", conn = myconn)
-			
-			
-			
-			#############
-			# Functions #
-			#############
-			self.log.info("Functions...")
-			
-			
-			self.log.debug("FUNCTION: fnTRAC")
-			s = """
+		
+		
+		
+		#############
+		# Functions #
+		#############
+		self.log.info("Functions...")
+		
+		
+		self.log.debug("FUNCTION: fnTRAC")
+		s = """
 CREATE OR REPLACE FUNCTION fnTRAC(detectionmethod INT) RETURNS INT AS $$
 DECLARE
 	strikes_header RECORD;
@@ -825,40 +847,24 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 """
-			self.db.executeSQLCommand(s, conn = myconn)
-			
-			
-			
-			###########
-			# Indices #
-			###########
-			self.log.info("Indices...")
-			
-			self.log.debug("INDEX: tblTRACDetails_HeaderID")
-			self.db.executeSQLCommand(self.db.createIndexSQLString("tblTRACDetails_HeaderID", "tblTRACDetails", "HeaderID"), conn = myconn)
-			
-			
-			self.log.debug("INDEX: tblTRACGrid_X_Y")
-			self.db.executeSQLCommand(self.db.createIndexSQLString("tblTRACGrid_X_Y", "tblTRACGrid", "X, Y"), conn = myconn)
-			
-			
-			self.db.disconnectFromDatabase(myconn)
-			
-			
-			
-			self.log.info("Starting TRAC...")
-			self.running = True
-			
-			t = self.threading.Thread(target = self.run)
-			t.setDaemon(1)
-			t.start()
-	
-	def stop(self):
-		PluginBase.stop(self)
+		self.db.executeSQLCommand(s, conn = myconn)
 		
 		
-		if self.ENABLED:
-			self.running = False
+		
+		###########
+		# Indices #
+		###########
+		self.log.info("Indices...")
+		
+		self.log.debug("INDEX: tblTRACDetails_HeaderID")
+		self.db.executeSQLCommand(self.db.createIndexSQLString("tblTRACDetails_HeaderID", "tblTRACDetails", "HeaderID"), conn = myconn)
+		
+		
+		self.log.debug("INDEX: tblTRACGrid_X_Y")
+		self.db.executeSQLCommand(self.db.createIndexSQLString("tblTRACGrid_X_Y", "tblTRACGrid", "X, Y"), conn = myconn)
+		
+		
+		self.db.disconnectFromDatabase(myconn)
 	
 	def writeXMLSettings(self):
 		PluginBase.writeXMLSettings(self)
@@ -894,3 +900,17 @@ $$ LANGUAGE plpgsql;
 			xmloutput = file(self.XML_SETTINGS_FILE, "w")
 			xmloutput.write(xmldoc.toprettyxml())
 			xmloutput.close()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

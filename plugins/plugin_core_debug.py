@@ -53,10 +53,14 @@ from plugin_core_base import PluginBase
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
-		mq_routing_key = "events.#"
+	def __init__(self):
+		PluginBase.__init__(self)
 		
-		PluginBase.__init__(self, filename, "Debug", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+		
+		self.MQ_ROUTING_KEY = "events.#"
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def onEventReceived(self, basic_deliver, properties, body):
 		PluginBase.onEventReceived(self, basic_deliver, properties, body)
@@ -102,3 +106,17 @@ class Plugin(PluginBase):
 			xmloutput = file(self.XML_SETTINGS_FILE, "w")
 			xmloutput.write(xmldoc.toprettyxml())
 			xmloutput.close()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

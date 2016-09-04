@@ -54,7 +54,7 @@ from smq_shared import SentenceDevice
 # Classes #
 ###########
 class Hardware(HardwareBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
+	def __init__(self):
 		self.CLOSE_DISTANCE = 15
 		
 		self.LD350_BITS = 8
@@ -69,9 +69,12 @@ class Hardware(HardwareBase):
 		self.MAP_MATRIX_CENTRE = (300, 300)
 		
 		
-		mq_routing_key = "{0}.core.ld350".format(mq_routing_key)
+		HardwareBase.__init__(self, self.LD350_NAME)
 		
-		HardwareBase.__init__(self, self.LD350_NAME, filename, "LD350", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+		self.MQ_ROUTING_KEY = "{0}.core.ld350".format(self.MQ_ROUTING_KEY)
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		HardwareBase.readXMLSettings(self)
@@ -220,7 +223,7 @@ class Hardware(HardwareBase):
 			self.log.error("An error has occurred while receiving the sentence.")
 			self.log.error(ex)
 	
-	def start(self):
+	def start(self, use_threading = True):
 		HardwareBase.start(self)
 		
 		
@@ -230,69 +233,9 @@ class Hardware(HardwareBase):
 			self.device = LD350(self.log, self.LD350_PORT, self.LD350_SPEED, self.LD350_BITS, self.LD350_PARITY, self.LD350_STOPBITS, self.LD350_SQUELCH, self.sentenceRX)
 			
 			
-			myconn = []
-			self.db.connectToDatabase(myconn)
-			
-			
-			##########
-			# Tables #
-			##########
-			self.log.info("Creating tables...")
-			
-			
-			# tblLD350Strikes
-			self.log.debug("TABLE: tblLD350Strikes")
-			self.db.executeSQLCommand(self.db.createTableSQLString("tblLD350Strikes"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "X", "smallint"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "Y", "smallint"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "DateTimeOfStrike", "timestamp"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "CorrectedStrikeDistance", "decimal(6,3)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "UncorrectedStrikeDistance", "decimal(6,3)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikeType", "varchar(2)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikePolarity", "varchar(1)"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikeAngle", "decimal(4,1)"), conn = myconn)
-			
-			
-			self.db.executeSQLCommand("INSERT INTO tblUnitStatus(Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected) VALUES(%(Hardware)s, %(SquelchLevel)s, %(UseUncorrectedStrikes)s, %(CloseAlarm)s, %(SevereAlarm)s, NULL)", {"Hardware": self.LD350_NAME, "SquelchLevel": self.LD350_SQUELCH, "UseUncorrectedStrikes": self.LD350_USE_UNCORRECTED_STRIKES, "CloseAlarm": False, "SevereAlarm": False}, myconn)
-			
-			
-			
-			#########
-			# Views #
-			#########
-			self.log.info("Creating views...")
-			
-			
-			self.db.executeSQLCommand("DROP VIEW IF EXISTS vwLD350StrikesPersistence CASCADE", conn = myconn)
-			self.db.executeSQLCommand("DROP VIEW IF EXISTS vwLD350StrikesSummaryByMinute CASCADE", conn = myconn)
-			
-			self.log.debug("VIEW: vwLD350StrikesPersistence")
-			self.db.executeSQLCommand("""CREATE VIEW vwLD350StrikesPersistence AS
-SELECT ID, X, Y, DateTimeOfStrike, CAST(EXTRACT(epoch from (LOCALTIMESTAMP - DateTimeOfStrike)) AS smallint) AS StrikeAge
-FROM tblLD350Strikes
-WHERE DateTimeOfStrike >= LOCALTIMESTAMP - INTERVAL '1 HOUR' AND DateTimeOfStrike >= (SELECT ServerStarted FROM tblServerDetails LIMIT 1)""", conn = myconn)
-		
-			self.log.debug("VIEW: vwLD350StrikesSummaryByMinute")
-			self.db.executeSQLCommand("""CREATE VIEW vwLD350StrikesSummaryByMinute AS
-SELECT CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp) AS Minute, ((CAST(EXTRACT(epoch from (CAST(to_char(LOCALTIMESTAMP, 'YYYY/MM/DD HH24:MI:00') AS timestamp) - CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp))) AS smallint)) / 60) AS StrikeAge, COUNT(ID) AS NumberOfStrikes
-FROM vwLD350StrikesPersistence
-GROUP BY CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp), ((CAST(EXTRACT(epoch from (CAST(to_char(CAST(to_char(LOCALTIMESTAMP, 'YYYY/MM/DD HH24:MI:00') AS timestamp), 'YYYY/MM/DD HH24:MI:00') AS timestamp) - CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp))) AS smallint)) / 60)""", conn = myconn)
-			
-			
-			
-			###########
-			# Indices #
-			###########
-			self.log.info("Indices...")
-			
-			self.log.debug("INDEX: tblLD350Strikes_X_Y")
-			self.db.executeSQLCommand(self.db.createIndexSQLString("tblLD350Strikes_X_Y", "tblLD350Strikes", "X, Y"), conn = myconn)
-			
-			self.log.debug("INDEX: tblLD350Strikes_DateTimeOfStrike")
-			self.db.executeSQLCommand(self.db.createIndexSQLString("tblLD350Strikes_DateTimeOfStrike", "tblLD350Strikes", "DateTimeOfStrike"), conn = myconn)
-			
-			
-			self.db.disconnectFromDatabase(myconn)
+			if not use_threading:
+				while True:
+					self.time.sleep(1.)
 	
 	def stop(self):
 		HardwareBase.stop(self)
@@ -301,6 +244,71 @@ GROUP BY CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp), 
 		if self.ENABLED and self.device is not None:
 			self.device.dispose()
 			self.device = None
+	
+	def updateDatabase(self):
+		myconn = []
+		self.db.connectToDatabase(myconn)
+		
+		
+		##########
+		# Tables #
+		##########
+		self.log.info("Creating tables...")
+		
+		
+		# tblLD350Strikes
+		self.log.debug("TABLE: tblLD350Strikes")
+		self.db.executeSQLCommand(self.db.createTableSQLString("tblLD350Strikes"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "X", "smallint"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "Y", "smallint"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "DateTimeOfStrike", "timestamp"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "CorrectedStrikeDistance", "decimal(6,3)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "UncorrectedStrikeDistance", "decimal(6,3)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikeType", "varchar(2)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikePolarity", "varchar(1)"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblLD350Strikes", "StrikeAngle", "decimal(4,1)"), conn = myconn)
+		
+		
+		self.db.executeSQLCommand("INSERT INTO tblUnitStatus(Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected) VALUES(%(Hardware)s, %(SquelchLevel)s, %(UseUncorrectedStrikes)s, %(CloseAlarm)s, %(SevereAlarm)s, NULL)", {"Hardware": self.LD350_NAME, "SquelchLevel": self.LD350_SQUELCH, "UseUncorrectedStrikes": self.LD350_USE_UNCORRECTED_STRIKES, "CloseAlarm": False, "SevereAlarm": False}, myconn)
+		
+		
+		
+		#########
+		# Views #
+		#########
+		self.log.info("Creating views...")
+		
+		
+		self.db.executeSQLCommand("DROP VIEW IF EXISTS vwLD350StrikesPersistence CASCADE", conn = myconn)
+		self.db.executeSQLCommand("DROP VIEW IF EXISTS vwLD350StrikesSummaryByMinute CASCADE", conn = myconn)
+		
+		self.log.debug("VIEW: vwLD350StrikesPersistence")
+		self.db.executeSQLCommand("""CREATE VIEW vwLD350StrikesPersistence AS
+SELECT ID, X, Y, DateTimeOfStrike, CAST(EXTRACT(epoch from (LOCALTIMESTAMP - DateTimeOfStrike)) AS smallint) AS StrikeAge
+FROM tblLD350Strikes
+WHERE DateTimeOfStrike >= LOCALTIMESTAMP - INTERVAL '1 HOUR' AND DateTimeOfStrike >= (SELECT ServerStarted FROM tblServerDetails LIMIT 1)""", conn = myconn)
+		
+		self.log.debug("VIEW: vwLD350StrikesSummaryByMinute")
+		self.db.executeSQLCommand("""CREATE VIEW vwLD350StrikesSummaryByMinute AS
+SELECT CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp) AS Minute, ((CAST(EXTRACT(epoch from (CAST(to_char(LOCALTIMESTAMP, 'YYYY/MM/DD HH24:MI:00') AS timestamp) - CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp))) AS smallint)) / 60) AS StrikeAge, COUNT(ID) AS NumberOfStrikes
+FROM vwLD350StrikesPersistence
+GROUP BY CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp), ((CAST(EXTRACT(epoch from (CAST(to_char(CAST(to_char(LOCALTIMESTAMP, 'YYYY/MM/DD HH24:MI:00') AS timestamp), 'YYYY/MM/DD HH24:MI:00') AS timestamp) - CAST(to_char(DateTimeOfStrike, 'YYYY/MM/DD HH24:MI:00') AS timestamp))) AS smallint)) / 60)""", conn = myconn)
+		
+		
+		
+		###########
+		# Indices #
+		###########
+		self.log.info("Indices...")
+		
+		self.log.debug("INDEX: tblLD350Strikes_X_Y")
+		self.db.executeSQLCommand(self.db.createIndexSQLString("tblLD350Strikes_X_Y", "tblLD350Strikes", "X, Y"), conn = myconn)
+		
+		self.log.debug("INDEX: tblLD350Strikes_DateTimeOfStrike")
+		self.db.executeSQLCommand(self.db.createIndexSQLString("tblLD350Strikes_DateTimeOfStrike", "tblLD350Strikes", "DateTimeOfStrike"), conn = myconn)
+		
+		
+		self.db.disconnectFromDatabase(myconn)
 	
 	def writeXMLSettings(self):
 		HardwareBase.writeXMLSettings(self)
@@ -427,3 +435,17 @@ class LD350(SentenceDevice):
 		
 		if not ok:
 			self.log.warn("The squelch doesn't appear to have been set.")
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Hardware()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

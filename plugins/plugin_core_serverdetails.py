@@ -54,16 +54,22 @@ from smq_shared import MQ
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
+	def __init__(self):
+		self.SERVER_COPYRIGHT = "(c)2008-2012, 2014, 2016 - Daniel Knaggs"
+		self.SERVER_NAME = "StormForce MQ"
+		self.SERVER_VERSION = "0.2.0"
+		self.STRIKE_COPYRIGHT = "Lightning Data (c) 2016 - Daniel Knaggs"
+		
 		self.UPDATE_PERIOD = 1.
 		
 		
-		mq_routing_key = "{0}.core.serverdetails".format(mq_routing_key)
+		PluginBase.__init__(self)
 		
-		PluginBase.__init__(self, filename, "ServerDetails", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
-		
-		
+		self.MQ_ROUTING_KEY = "{0}.core.serverdetails".format(self.MQ_ROUTING_KEY)
 		self.MQ_RX_ENABLED = False
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		PluginBase.readXMLSettings(self)
@@ -80,6 +86,9 @@ class Plugin(PluginBase):
 					
 					if key == "Enabled":
 						self.ENABLED = self.cBool(val)
+						
+					elif key == "StrikeCopyright":
+						self.STRIKE_COPYRIGHT = val
 						
 					elif key == "UpdatePeriod":
 						self.UPDATE_PERIOD = float(val)
@@ -99,13 +108,16 @@ class Plugin(PluginBase):
 					myconn = []
 					self.db.connectToDatabase(myconn)
 					
-					rows = self.db.executeSQLQuery("SELECT ServerStarted, DATE_PART('epoch', ServerStarted) AS ServerStartedUT, ServerApplication, ServerCopyright, ServerVersion, StrikeCopyright FROM tblServerDetails LIMIT 1", conn = myconn)
+					rows = self.db.executeSQLQuery("SELECT ServerStarted, DATE_PART('epoch', ServerStarted) AS ServerStartedUT, DATE_PART('epoch', LOCALTIMESTAMP) - DATE_PART('epoch', ServerStarted) AS ServerUptime, ServerApplication, ServerCopyright, ServerVersion, StrikeCopyright FROM tblServerDetails LIMIT 1", conn = myconn)
 					
 					self.db.disconnectFromDatabase(myconn)
 					
 					
+					# Send out the server details
+					self.log.info("Sending out the server details...")
+					
 					for row in rows:
-						m = self.constructMessage("ServerDetails", {"ServerStarted": str(row[0]), "ServerStartedUT": row[1], "ServerApplication": row[2], "ServerCopyright": row[3], "ServerVersion": row[4], "StrikeCopyright": row[5]})
+						m = self.constructMessage("ServerDetails", {"ServerStarted": str(row[0]), "ServerStartedUT": row[1], "ServerUptime": row[2], "ServerApplication": row[3], "ServerCopyright": row[4], "ServerVersion": row[5], "StrikeCopyright": row[6]})
 						self.mq.publishMessage(m[1], headers = m[0])
 						break
 					
@@ -119,21 +131,54 @@ class Plugin(PluginBase):
 			
 			self.time.sleep(0.1)
 	
-	def start(self):
-		PluginBase.start(self)
+	def start(self, use_threading = True):
+		PluginBase.start(self, use_threading)
 		
 		
 		if self.ENABLED:
 			self.log.info("Starting server details...")
 			self.running = True
 			
-			t = self.threading.Thread(target = self.run)
-			t.setDaemon(1)
-			t.start()
+			if use_threading:
+				t = self.threading.Thread(target = self.run)
+				t.setDaemon(1)
+				t.start()
+				
+			else:
+				self.run()
 	
 	def stop(self):
 		if self.ENABLED:
 			self.running = False
+	
+	def updateDatabase(self):
+		PluginBase.updateDatabase(self)
+		
+		
+		myconn = []
+		self.db.connectToDatabase(myconn)
+		
+		
+		##########
+		# Tables #
+		##########
+		self.log.info("Creating tables...")
+		
+		
+		# tblServerDetails
+		self.log.debug("TABLE: tblServerDetails")
+		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblServerDetails CASCADE", conn = myconn)
+		self.db.executeSQLCommand("CREATE TABLE tblServerDetails(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
+		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerStarted timestamp", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerApplication varchar(20)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerCopyright varchar(100)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN ServerVersion varchar(8)", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblServerDetails ADD COLUMN StrikeCopyright varchar(100)", conn = myconn)
+		
+		self.db.executeSQLCommand("INSERT INTO tblServerDetails(ServerStarted, ServerApplication, ServerCopyright, ServerVersion, StrikeCopyright) VALUES(LOCALTIMESTAMP, %(ServerApplication)s, %(ServerCopyright)s, %(ServerVersion)s, %(StrikeCopyright)s)", {"ServerApplication": self.SERVER_NAME, "ServerCopyright": self.SERVER_COPYRIGHT, "ServerVersion": self.SERVER_VERSION, "StrikeCopyright": self.STRIKE_COPYRIGHT}, myconn)
+		
+		
+		self.db.disconnectFromDatabase(myconn)
 	
 	def writeXMLSettings(self):
 		PluginBase.writeXMLSettings(self)
@@ -151,6 +196,10 @@ class Plugin(PluginBase):
 			
 			
 			var = xmldoc.createElement("Setting")
+			var.setAttribute("StrikeCopyright", str(self.STRIKE_COPYRIGHT))
+			settings.appendChild(var)
+			
+			var = xmldoc.createElement("Setting")
 			var.setAttribute("UpdatePeriod", str(self.UPDATE_PERIOD))
 			settings.appendChild(var)
 			
@@ -158,3 +207,17 @@ class Plugin(PluginBase):
 			xmloutput = file(self.XML_SETTINGS_FILE, "w")
 			xmloutput.write(xmldoc.toprettyxml())
 			xmloutput.close()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

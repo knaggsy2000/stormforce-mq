@@ -54,7 +54,7 @@ from smq_shared import SentenceDevice
 # Classes #
 ###########
 class Hardware(HardwareBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
+	def __init__(self):
 		self.CLOSE_DISTANCE = 15
 		
 		self.EFM100_BITS = 8
@@ -65,9 +65,12 @@ class Hardware(HardwareBase):
 		self.EFM100_STOPBITS = 1
 		
 		
-		mq_routing_key = "{0}.core.efm100".format(mq_routing_key)
+		HardwareBase.__init__(self, self.EFM100_NAME)
 		
-		HardwareBase.__init__(self, self.EFM100_NAME, filename, "EFM100", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+		self.MQ_ROUTING_KEY = "{0}.core.efm100".format(self.MQ_ROUTING_KEY)
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		HardwareBase.readXMLSettings(self)
@@ -146,7 +149,7 @@ class Hardware(HardwareBase):
 			self.log.error("An error has occurred while receiving the sentence.")
 			self.log.error(ex)
 	
-	def start(self):
+	def start(self, use_threading = True):
 		HardwareBase.start(self)
 		
 		
@@ -156,37 +159,9 @@ class Hardware(HardwareBase):
 			self.device = EFM100(self.EFM100_PORT, self.EFM100_SPEED, self.EFM100_BITS, self.EFM100_PARITY, self.EFM100_STOPBITS, self.sentenceRX)
 			
 			
-			myconn = []
-			self.db.connectToDatabase(myconn)
-			
-			
-			##########
-			# Tables #
-			##########
-			self.log.info("Creating tables...")
-			
-			
-			# tblEFM100ElectricFieldStrength
-			self.log.debug("TABLE: tblEFM100ElectricFieldStrength")
-			self.db.executeSQLCommand(self.db.createTableSQLString("tblEFM100ElectricFieldStrength"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblEFM100ElectricFieldStrength", "DateTimeOfMeasurement", "timestamp"), conn = myconn)
-			self.db.executeSQLCommand(self.db.addColumnSQLString("tblEFM100ElectricFieldStrength", "kVm", "decimal(4,2)"), conn = myconn)
-			
-			
-			self.db.executeSQLCommand("INSERT INTO tblUnitStatus(Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected) VALUES(%(Hardware)s, %(SquelchLevel)s, %(UseUncorrectedStrikes)s, %(CloseAlarm)s, %(SevereAlarm)s, NULL)", {"Hardware": self.EFM100_NAME, "SquelchLevel": 0, "UseUncorrectedStrikes": False, "CloseAlarm": False, "SevereAlarm": False}, myconn)
-			
-			
-			
-			###########
-			# Indices #
-			###########
-			self.log.info("Indices...")
-			
-			self.log.debug("INDEX: tblEFM100ElectricFieldStrength_DateTimeOfMeasurement")
-			self.db.executeSQLCommand(self.db.createIndexSQLString("tblEFM100ElectricFieldStrength_DateTimeOfMeasurement", "tblEFM100ElectricFieldStrength", "DateTimeOfMeasurement"), conn = myconn)
-			
-			
-			self.db.disconnectFromDatabase(myconn)
+			if not use_threading:
+				while True:
+					self.time.sleep(1.)
 	
 	def stop(self):
 		HardwareBase.stop(self)
@@ -195,6 +170,39 @@ class Hardware(HardwareBase):
 		if self.ENABLED and self.device is not None:
 			self.device.dispose()
 			self.device = None
+	
+	def updateDatabase(self):
+		myconn = []
+		self.db.connectToDatabase(myconn)
+		
+		
+		##########
+		# Tables #
+		##########
+		self.log.info("Creating tables...")
+		
+		
+		# tblEFM100ElectricFieldStrength
+		self.log.debug("TABLE: tblEFM100ElectricFieldStrength")
+		self.db.executeSQLCommand(self.db.createTableSQLString("tblEFM100ElectricFieldStrength"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblEFM100ElectricFieldStrength", "DateTimeOfMeasurement", "timestamp"), conn = myconn)
+		self.db.executeSQLCommand(self.db.addColumnSQLString("tblEFM100ElectricFieldStrength", "kVm", "decimal(4,2)"), conn = myconn)
+		
+		
+		self.db.executeSQLCommand("INSERT INTO tblUnitStatus(Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected) VALUES(%(Hardware)s, %(SquelchLevel)s, %(UseUncorrectedStrikes)s, %(CloseAlarm)s, %(SevereAlarm)s, NULL)", {"Hardware": self.EFM100_NAME, "SquelchLevel": 0, "UseUncorrectedStrikes": False, "CloseAlarm": False, "SevereAlarm": False}, myconn)
+		
+		
+		
+		###########
+		# Indices #
+		###########
+		self.log.info("Indices...")
+		
+		self.log.debug("INDEX: tblEFM100ElectricFieldStrength_DateTimeOfMeasurement")
+		self.db.executeSQLCommand(self.db.createIndexSQLString("tblEFM100ElectricFieldStrength_DateTimeOfMeasurement", "tblEFM100ElectricFieldStrength", "DateTimeOfMeasurement"), conn = myconn)
+		
+		
+		self.db.disconnectFromDatabase(myconn)
 	
 	def writeXMLSettings(self):
 		HardwareBase.writeXMLSettings(self)
@@ -251,3 +259,17 @@ class EFM100(SentenceDevice):
 		
 		self.setupUnit(port, speed, bits, parity, stopbits)
 		self.start()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Hardware()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

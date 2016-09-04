@@ -45,7 +45,7 @@
 ###################################################
 # StormForce MQ Client                            #
 ###################################################
-# Version:     v0.1.1                             #
+# Version:     v0.2.0                             #
 ###################################################
 
 from danlog import DanLog
@@ -81,7 +81,7 @@ class SMQClient():
 		self.CAPTURE_DIRECTORY = "capture"
 		self.CAPTURE_FILENAME = "stormforce-mq.png"
 		self.CAPTURE_FULL_PATH =  self.os.path.join(self.CAPTURE_DIRECTORY, self.CAPTURE_FILENAME)
-		self.CLIENT_VERSION = "0.1.1"
+		self.CLIENT_VERSION = "0.2.0"
 		
 		self.DEMO_MODE = False
 		
@@ -1085,7 +1085,7 @@ class UI():
 				b = self.json.loads(body)
 				
 				if len(b) > 0:
-					self.updateUptime(self.time.time() - b["ServerStartedUT"])
+					self.updateUptime(b["ServerUptime"])
 					
 					
 					server_details = "%s v%s\n%s\n\n%s" % (b["ServerApplication"], b["ServerVersion"], b["ServerCopyright"], b["StrikeCopyright"])

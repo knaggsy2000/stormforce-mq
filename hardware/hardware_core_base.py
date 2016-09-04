@@ -45,6 +45,11 @@
 ###################################################
 # StormForce Base Hardware                        #
 ###################################################
+import os
+import sys
+
+sys.path.append(os.path.join(sys.path[0], ".."))
+
 
 from danlog import DanLog
 from smq_shared import Database, MQ
@@ -54,7 +59,7 @@ from smq_shared import Database, MQ
 # Classes #
 ###########
 class HardwareBase():
-	def __init__(self, hardware_friendly_name, hardware_filename, hardware_name, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
+	def __init__(self, hardware_name):
 		from datetime import datetime
 		from xml.dom import minidom
 		
@@ -67,26 +72,48 @@ class HardwareBase():
 		
 		self.ENABLED = False
 		
-		self.HARDWARE_FILENAME = "{0}.py".format(hardware_filename)
-		self.HARDWARE_FRIENDLY_NAME = hardware_friendly_name
-		self.HARDWARE_NAME = hardware_name
+		self.MQ_DURABLE = True
+		self.MQ_EXCHANGE_NAME = ""
+		self.MQ_EXCHANGE_TYPE = ""
+		self.MQ_HOSTNAME = ""
+		self.MQ_NO_ACK_MESSAGES = False
+		self.MQ_PASSWORD = ""
+		self.MQ_PORT = 5672
+		self.MQ_REPLY_TO = ""
+		self.MQ_ROUTING_KEY = ""
+		self.MQ_USERNAME = ""
+		self.MQ_VIRTUAL_HOST = "/"
+		
+		self.POSTGRESQL_DATABASE = ""
+		self.POSTGRESQL_PASSWORD = ""
+		self.POSTGRESQL_SERVER = ""
+		self.POSTGRESQL_USERNAME = ""
 		
 		
 		self.datetime = datetime
 		self.device = None
-		self.db = Database(database_server, database_database, database_username, database_password)
 		self.json = json
-		self.log = DanLog("Hardware{0}".format(self.HARDWARE_NAME))
 		self.math = math
 		self.minidom = minidom
-		self.mq = MQ(mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to, None)
 		self.os = os
 		self.threading = threading
 		self.time = time
 		
 		
-		self.XML_SETTINGS_FILE = self.os.path.join("hardware", "{0}.xml".format(hardware_filename))
+		self.PLUGIN_FULL_PATH = self.getScriptPath()
+		self.PLUGIN_FOLDER = self.os.path.dirname(self.PLUGIN_FULL_PATH)
+		self.PLUGIN_FILENAME = self.os.path.basename(self.PLUGIN_FULL_PATH)
+		self.PLUGIN_FILENAME_WITHOUT_EXTENSION = self.os.path.splitext(self.PLUGIN_FILENAME)[0]
+		self.log = DanLog("Hardware->{0}".format(self.PLUGIN_FILENAME))
 		
+		self.HARDWARE_NAME = hardware_name
+		
+		
+		self.XML_EXTENSIBLE_SETTINGS_FILE = self.os.path.join(self.PLUGIN_FOLDER, "smq_extensible.xml")
+		self.readXMLExtensibleSettings()
+		
+		
+		self.XML_SETTINGS_FILE = self.os.path.join(self.PLUGIN_FOLDER, "{0}.xml".format(self.PLUGIN_FILENAME_WITHOUT_EXTENSION))
 		
 		if not self.os.path.exists(self.XML_SETTINGS_FILE):
 			self.log.warn("No XML settings have been found for the hardware, creating one...")
@@ -106,15 +133,25 @@ class HardwareBase():
 		else:
 			raise Exception("Value cannot be converted to boolean.")
 	
+	def connect(self):
+		self.log.debug("Starting...")
+		
+		
+		self.db = Database(self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD)
+		self.mq = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, None)
+	
 	def constructMessage(self, event_name, details):
 		h = {
-			"HardwareFilename": self.HARDWARE_FILENAME,
-			"HardwareName": self.HARDWARE_FRIENDLY_NAME,
+			"HardwareFilename": self.PLUGIN_FILENAME,
+			"HardwareName": self.HARDWARE_NAME,
 			"EventName": event_name
 		}
 		
 		
 		return [h, self.json.dumps(details)]
+	
+	def getScriptPath(self):
+		raise Exception("Please override this function in the plugin with: -\n\nreturn self.os.path.realpath(__file__)")
 	
 	def ifNoneReturnZero(self, strinput):
 		if strinput is None:
@@ -123,13 +160,83 @@ class HardwareBase():
 		else:
 			return strinput
 	
+	def readXMLExtensibleSettings(self):
+		self.log.debug("Starting...")
+		
+		
+		if self.os.path.exists(self.XML_EXTENSIBLE_SETTINGS_FILE):
+			xmldoc = self.minidom.parse(self.XML_EXTENSIBLE_SETTINGS_FILE)
+			
+			myvars = xmldoc.getElementsByTagName("Setting")
+			
+			for var in myvars:
+				for key in var.attributes.keys():
+					val = str(var.attributes[key].value)
+					
+					# Now put the correct values to correct key
+					if key == "PostgreSQLDatabase":
+						self.POSTGRESQL_DATABASE = val
+						
+					elif key == "PostgreSQLPassword":
+						self.POSTGRESQL_PASSWORD = val
+						
+					elif key == "PostgreSQLServer":
+						self.POSTGRESQL_SERVER = val
+						
+					elif key == "PostgreSQLUsername":
+						self.POSTGRESQL_USERNAME = val
+						
+					elif key == "MQDurable":
+						self.MQ_DURABLE = self.cBool(val)
+						
+					elif key == "MQExchangeName":
+						self.MQ_EXCHANGE_NAME = val
+						
+					elif key == "MQExchangeType":
+						self.MQ_EXCHANGE_TYPE = val
+						
+					elif key == "MQHostname":
+						self.MQ_HOSTNAME = val
+						
+					elif key == "MQNoAckMessages":
+						self.MQ_NO_ACK_MESSAGES = self.cBool(val)
+						
+					elif key == "MQPassword":
+						self.MQ_PASSWORD = val
+						
+					elif key == "MQPort":
+						self.MQ_PORT = int(val)
+						
+					elif key == "MQReplyTo":
+						self.MQ_REPLY_TO = val
+						
+					elif key == "MQRoutingKey":
+						self.MQ_ROUTING_KEY = val
+						
+					elif key == "MQUsername":
+						self.MQ_USERNAME = val
+						
+					elif key == "MQVirtualHost":
+						self.MQ_VIRTUAL_HOST = val
+						
+					else:
+						self.log.warn("XML setting attribute \"{0}\" isn't known.  Ignoring...".format(key))
+	
 	def readXMLSettings(self):
 		self.log.debug("Starting...")
 	
-	def start(self):
+	def start(self, use_threading = True):
 		self.log.debug("Starting...")
+		
+		
+		if self.ENABLED:
+			self.connect()
+			self.updateDatabase()
 	
 	def stop(self):
+		self.log.debug("Starting...")
+	
+	def updateDatabase(self):
 		self.log.debug("Starting...")
 	
 	def writeXMLSettings(self):

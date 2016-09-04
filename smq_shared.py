@@ -323,7 +323,7 @@ class MQ():
 		self.channel.add_on_close_callback(self.onChannelClose)
 		self.channel.exchange_declare(self.onExchangeDeclareOK, exchange = self.MQ_EXCHANGE_NAME, type = self.MQ_EXCHANGE_TYPE, durable = self.MQ_DURABLE)
 	
-	def onConnectionClose(self):
+	def onConnectionClose(self, conn, reply_code, reply_text):
 		self.log.debug("Starting...")
 		
 		

@@ -56,8 +56,11 @@ from twisted.web import xmlrpc
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
-		PluginBase.__init__(self, filename, "SXR", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+	def __init__(self):
+		self.SERVER_PORT = 7397
+		
+		
+		PluginBase.__init__(self)
 		
 		
 		from twisted.internet import defer, reactor
@@ -71,8 +74,9 @@ class Plugin(PluginBase):
 		
 		
 		self.MQ_RX_ENABLED = False
-		
-		self.SERVER_PORT = 7397
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		PluginBase.readXMLSettings(self)
@@ -93,8 +97,8 @@ class Plugin(PluginBase):
 					elif key == "ServerPort":
 						self.SERVER_PORT = int(val)
 	
-	def start(self):
-		PluginBase.start(self)
+	def start(self, use_threading = True):
+		PluginBase.start(self, use_threading)
 		
 		
 		if self.ENABLED:
@@ -111,9 +115,14 @@ class Plugin(PluginBase):
 			
 			self.twisted_internet_reactor.listenTCP(self.SERVER_PORT, self.twisted_web_server.Site(s))
 			
-			t = self.threading.Thread(target = self.twisted_internet_reactor.run, args = (False,))
-			t.setDaemon(1)
-			t.start()
+			
+			if use_threading:
+				t = self.threading.Thread(target = self.twisted_internet_reactor.run, args = (False,))
+				t.setDaemon(1)
+				t.start()
+				
+			else:
+				self.twisted_internet_reactor.run()
 	
 	def stop(self):
 		PluginBase.stop(self)
@@ -495,3 +504,17 @@ class XRXMLRPCFunctions(xmlrpc.XMLRPC):
 	
 	xmlrpc_unitStatus.help = "Returns information about the Boltek LD-250 and Boltek EFM-100."
 	xmlrpc_unitStatus.signature = [["SXRDataSet[Hardware, SquelchLevel, UseUncorrectedStrikes, CloseAlarm, SevereAlarm, ReceiverLastDetected, ReceiverLost]", "none"]]
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

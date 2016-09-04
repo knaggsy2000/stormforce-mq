@@ -53,13 +53,15 @@ from plugin_core_base import PluginBase
 # Classes #
 ###########
 class Plugin(PluginBase):
-	def __init__(self, filename, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
-		mq_routing_key = "{0}.core.strikecounters".format(mq_routing_key)
-		
-		PluginBase.__init__(self, filename, "StrikeCounters", database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to)
+	def __init__(self):
+		PluginBase.__init__(self)
 		
 		
+		self.MQ_ROUTING_KEY = "{0}.core.strikecounters".format(self.MQ_ROUTING_KEY)
 		self.MQ_RX_ENABLED = False
+	
+	def getScriptPath(self):
+		return self.os.path.realpath(__file__)
 	
 	def readXMLSettings(self):
 		PluginBase.readXMLSettings(self)
@@ -156,8 +158,8 @@ class Plugin(PluginBase):
 			
 			self.time.sleep(0.1)
 	
-	def start(self):
-		PluginBase.start(self)
+	def start(self, use_threading = True):
+		PluginBase.start(self, use_threading)
 		
 		
 		if self.ENABLED:
@@ -165,38 +167,13 @@ class Plugin(PluginBase):
 			self.running = True
 			
 			
-			myconn = []
-			self.db.connectToDatabase(myconn)
-			
-			
-			##########
-			# Tables #
-			##########
-			self.log.info("Creating tables...")
-			
-			
-			# tblStrikeCounter
-			self.log.debug("TABLE: tblStrikeCounter")
-			self.db.executeSQLCommand("DROP TABLE IF EXISTS tblStrikeCounter CASCADE", conn = myconn)
-			self.db.executeSQLCommand("CREATE TABLE tblStrikeCounter(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN CloseMinute int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN CloseTotal int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN NoiseMinute int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN NoiseTotal int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesMinute int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesTotal int", conn = myconn)
-			self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesOutOfRange int", conn = myconn)
-			
-			self.db.executeSQLCommand("INSERT INTO tblStrikeCounter(CloseMinute, CloseTotal, NoiseMinute, NoiseTotal, StrikesMinute, StrikesTotal, StrikesOutOfRange) VALUES(%(N)s, %(N)s, %(N)s, %(N)s, %(N)s, %(N)s, %(N)s)", {"N": 0}, myconn)
-			
-			
-			self.db.disconnectFromDatabase(myconn)
-			
-			
-			
-			t = self.threading.Thread(target = self.run)
-			t.setDaemon(1)
-			t.start()
+			if use_threading:
+				t = self.threading.Thread(target = self.run)
+				t.setDaemon(1)
+				t.start()
+				
+			else:
+				self.run()
 	
 	def stop(self):
 		PluginBase.stop(self)
@@ -204,6 +181,37 @@ class Plugin(PluginBase):
 		
 		if self.ENABLED:
 			self.running = False
+	
+	def updateDatabase(self):
+		PluginBase.updateDatabase(self)
+		
+		
+		myconn = []
+		self.db.connectToDatabase(myconn)
+		
+		
+		##########
+		# Tables #
+		##########
+		self.log.info("Creating tables...")
+		
+		
+		# tblStrikeCounter
+		self.log.debug("TABLE: tblStrikeCounter")
+		self.db.executeSQLCommand("DROP TABLE IF EXISTS tblStrikeCounter CASCADE", conn = myconn)
+		self.db.executeSQLCommand("CREATE TABLE tblStrikeCounter(ID bigserial PRIMARY KEY)", conn = myconn) # MEMORY
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN CloseMinute int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN CloseTotal int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN NoiseMinute int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN NoiseTotal int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesMinute int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesTotal int", conn = myconn)
+		self.db.executeSQLCommand("ALTER TABLE tblStrikeCounter ADD COLUMN StrikesOutOfRange int", conn = myconn)
+		
+		self.db.executeSQLCommand("INSERT INTO tblStrikeCounter(CloseMinute, CloseTotal, NoiseMinute, NoiseTotal, StrikesMinute, StrikesTotal, StrikesOutOfRange) VALUES(%(N)s, %(N)s, %(N)s, %(N)s, %(N)s, %(N)s, %(N)s)", {"N": 0}, myconn)
+		
+		
+		self.db.disconnectFromDatabase(myconn)
 	
 	def writeXMLSettings(self):
 		PluginBase.writeXMLSettings(self)
@@ -223,3 +231,17 @@ class Plugin(PluginBase):
 			xmloutput = file(self.XML_SETTINGS_FILE, "w")
 			xmloutput.write(xmldoc.toprettyxml())
 			xmloutput.close()
+
+
+
+########
+# Main #
+########
+if __name__ == "__main__":
+	try:
+		p = Plugin()
+		p.start(use_threading = False)
+		p = None
+		
+	except Exception, ex:
+		print "Exception: {0}".format(ex)

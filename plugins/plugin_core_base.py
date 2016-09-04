@@ -45,6 +45,11 @@
 ###################################################
 # StormForce Base Plugin                          #
 ###################################################
+import os
+import sys
+
+sys.path.append(os.path.join(sys.path[0], ".."))
+
 
 from danlog import DanLog
 from smq_shared import Database, MQ
@@ -54,7 +59,7 @@ from smq_shared import Database, MQ
 # Classes #
 ###########
 class PluginBase():
-	def __init__(self, plugin_filename, plugin_name, database_server, database_database, database_username, database_password, mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to):
+	def __init__(self):
 		from datetime import datetime, timedelta
 		from xml.dom import minidom
 		
@@ -66,18 +71,28 @@ class PluginBase():
 		
 		self.ENABLED = False
 		
+		self.MQ_DURABLE = True
+		self.MQ_EXCHANGE_NAME = ""
+		self.MQ_EXCHANGE_TYPE = ""
+		self.MQ_HOSTNAME = ""
+		self.MQ_NO_ACK_MESSAGES = False
+		self.MQ_PASSWORD = ""
+		self.MQ_PORT = 5672
+		self.MQ_REPLY_TO = ""
+		self.MQ_ROUTING_KEY = ""
 		self.MQ_RX_ENABLED = True
+		self.MQ_USERNAME = ""
+		self.MQ_VIRTUAL_HOST = "/"
 		
-		self.PLUGIN_FILENAME = "{0}.py".format(plugin_filename)
-		self.PLUGIN_NAME = plugin_name
+		self.POSTGRESQL_DATABASE = ""
+		self.POSTGRESQL_PASSWORD = ""
+		self.POSTGRESQL_SERVER = ""
+		self.POSTGRESQL_USERNAME = ""
 		
 		
 		self.datetime = datetime
-		self.db = Database(database_server, database_database, database_username, database_password)
 		self.json = json
-		self.log = DanLog("Plugin{0}".format(self.PLUGIN_NAME))
 		self.minidom = minidom
-		self.mq = MQ(mq_hostname, mq_port, mq_username, mq_password, mq_virtual_host, mq_exchange_name, mq_exchange_type, mq_routing_key, mq_durable, mq_no_ack, mq_reply_to, self.onEventReceived)
 		self.os = os
 		self.running = False
 		self.threading = threading
@@ -85,8 +100,18 @@ class PluginBase():
 		self.timedelta = timedelta
 		
 		
-		self.XML_SETTINGS_FILE = self.os.path.join("plugins", "{0}.xml".format(plugin_filename))
+		self.PLUGIN_FULL_PATH = self.getScriptPath()
+		self.PLUGIN_FOLDER = self.os.path.dirname(self.PLUGIN_FULL_PATH)
+		self.PLUGIN_FILENAME = self.os.path.basename(self.PLUGIN_FULL_PATH)
+		self.PLUGIN_FILENAME_WITHOUT_EXTENSION = self.os.path.splitext(self.PLUGIN_FILENAME)[0]
+		self.log = DanLog("Plugin->{0}".format(self.PLUGIN_FILENAME))
 		
+		
+		self.XML_EXTENSIBLE_SETTINGS_FILE = self.os.path.join(self.PLUGIN_FOLDER, "smq_extensible.xml")
+		self.readXMLExtensibleSettings()
+		
+		
+		self.XML_SETTINGS_FILE = self.os.path.join(self.PLUGIN_FOLDER, "{0}.xml".format(self.PLUGIN_FILENAME_WITHOUT_EXTENSION))
 		
 		if not self.os.path.exists(self.XML_SETTINGS_FILE):
 			self.log.warn("No XML settings have been found for the plugin, creating one...")
@@ -112,15 +137,24 @@ class PluginBase():
 		else:
 			raise Exception("Value cannot be converted to boolean.")
 	
+	def connect(self):
+		self.log.debug("Starting...")
+		
+		
+		self.db = Database(self.POSTGRESQL_SERVER, self.POSTGRESQL_DATABASE, self.POSTGRESQL_USERNAME, self.POSTGRESQL_PASSWORD)
+		self.mq = MQ(self.MQ_HOSTNAME, self.MQ_PORT, self.MQ_USERNAME, self.MQ_PASSWORD, self.MQ_VIRTUAL_HOST, self.MQ_EXCHANGE_NAME, self.MQ_EXCHANGE_TYPE, self.MQ_ROUTING_KEY, self.MQ_DURABLE, self.MQ_NO_ACK_MESSAGES, self.MQ_REPLY_TO, self.onEventReceived)
+	
 	def constructMessage(self, event_name, details):
 		h = {
 			"PluginFilename": self.PLUGIN_FILENAME,
-			"PluginName": self.PLUGIN_NAME,
 			"EventName": event_name
 		}
 		
 		
 		return [h, self.json.dumps(details)]
+	
+	def getScriptPath(self):
+		raise Exception("Please override this function in the plugin with: -\n\nreturn self.os.path.realpath(__file__)")
 	
 	def ifNoneReturnZero(self, strinput):
 		if strinput is None:
@@ -132,17 +166,87 @@ class PluginBase():
 	def onEventReceived(self, basic_deliver, properties, body):
 		self.log.debug("Starting...")
 	
+	def readXMLExtensibleSettings(self):
+		self.log.debug("Starting...")
+		
+		
+		if self.os.path.exists(self.XML_EXTENSIBLE_SETTINGS_FILE):
+			xmldoc = self.minidom.parse(self.XML_EXTENSIBLE_SETTINGS_FILE)
+			
+			myvars = xmldoc.getElementsByTagName("Setting")
+			
+			for var in myvars:
+				for key in var.attributes.keys():
+					val = str(var.attributes[key].value)
+					
+					# Now put the correct values to correct key
+					if key == "PostgreSQLDatabase":
+						self.POSTGRESQL_DATABASE = val
+						
+					elif key == "PostgreSQLPassword":
+						self.POSTGRESQL_PASSWORD = val
+						
+					elif key == "PostgreSQLServer":
+						self.POSTGRESQL_SERVER = val
+						
+					elif key == "PostgreSQLUsername":
+						self.POSTGRESQL_USERNAME = val
+						
+					elif key == "MQDurable":
+						self.MQ_DURABLE = self.cBool(val)
+						
+					elif key == "MQExchangeName":
+						self.MQ_EXCHANGE_NAME = val
+						
+					elif key == "MQExchangeType":
+						self.MQ_EXCHANGE_TYPE = val
+						
+					elif key == "MQHostname":
+						self.MQ_HOSTNAME = val
+						
+					elif key == "MQNoAckMessages":
+						self.MQ_NO_ACK_MESSAGES = self.cBool(val)
+						
+					elif key == "MQPassword":
+						self.MQ_PASSWORD = val
+						
+					elif key == "MQPort":
+						self.MQ_PORT = int(val)
+						
+					elif key == "MQReplyTo":
+						self.MQ_REPLY_TO = val
+						
+					elif key == "MQRoutingKey":
+						self.MQ_ROUTING_KEY = val
+						
+					elif key == "MQUsername":
+						self.MQ_USERNAME = val
+						
+					elif key == "MQVirtualHost":
+						self.MQ_VIRTUAL_HOST = val
+						
+					else:
+						self.log.warn("XML setting attribute \"{0}\" isn't known.  Ignoring...".format(key))
+	
 	def readXMLSettings(self):
 		self.log.debug("Starting...")
 	
-	def start(self):
+	def start(self, use_threading = True):
 		self.log.debug("Starting...")
 		
 		
-		if self.ENABLED and self.MQ_RX_ENABLED:
-			t = self.threading.Thread(target = self.mq.start)
-			t.setDaemon(1)
-			t.start()
+		if self.ENABLED:
+			self.connect()
+			self.updateDatabase()
+			
+			if self.MQ_RX_ENABLED:
+				if use_threading:
+					t = self.threading.Thread(target = self.mq.start)
+					t.setDaemon(1)
+					t.start()
+					
+				else:
+					self.mq.start()
 	
 	def stop(self):
 		self.log.debug("Starting...")
@@ -150,6 +254,9 @@ class PluginBase():
 		
 		if self.ENABLED and self.MQ_RX_ENABLED:
 			self.mq.stop()
+	
+	def updateDatabase(self):
+		self.log.debug("Starting...")
 	
 	def writeXMLSettings(self):
 		self.log.debug("Starting...")
