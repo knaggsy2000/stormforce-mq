@@ -113,15 +113,15 @@ Since v0.2.0 both the hardware and the plugins can be ran independently in anoth
 
 ## Notes (S = server, C = client)
 ###v0.2.0 - 4th September 2016
->  1. (S) Removed the MQ initialisation from the server as it didn't even use it.
->  2. (S) MQ client plugin no longer fires two threads which both did the same job.
->  3. (S) Fixed the shared MQ class as the "onConnectionClose" callback didn't have the correct arguments.
->  4. (S) Both hardware and plugins now read the settings from a settings XML file placed in the same directory, rather than being passed them - this allows the hardware and plugins to be ran on completely box.
->  5. (S) The initialisation of both the hardware and the plugins are now done in a separate class.
->  6. (S) The plugins can now be started in their own Python process using the "smq_extensible.xml" file (related to point 4) either through the SMQ server or directly via Python.
->  7. (S) The plugins now only connect to MQ and the database if they are enabled.
->  8. (S) The plugin base now has a separate routine for updating the database.  The core plugins have been amended where required.
->  9. (S) The hardware base now has a separate routine for updating the database.  The core hardware have been amended where required.
+> 1. (S) Removed the MQ initialisation from the server as it didn't even use it.
+> 2. (S) MQ client plugin no longer fires two threads which both did the same job.
+> 3. (S) Fixed the shared MQ class as the "onConnectionClose" callback didn't have the correct arguments.
+> 4. (S) Both hardware and plugins now read the settings from a settings XML file placed in the same directory, rather than being passed them - this allows the hardware and plugins to be ran on completely box.
+> 5. (S) The initialisation of both the hardware and the plugins are now done in a separate class.
+> 6. (S) The plugins can now be started in their own Python process using the "smq_extensible.xml" file (related to point 4) either through the SMQ server or directly via Python.
+> 7. (S) The plugins now only connect to MQ and the database if they are enabled.
+> 8. (S) The plugin base now has a separate routine for updating the database.  The core plugins have been amended where required.
+> 9. (S) The hardware base now has a separate routine for updating the database.  The core hardware have been amended where required.
 > 10. (S) The hardware can now be started in their own Python process using the "smq_extensible.xml" file (related to point 4) either through the SMQ server or directly via Python.
 > 11. (S) Moved the remaining server details (SQL and variables) from the server and placed into the plugin.
 > 12. (S) Fixed the uptime issue sent out by the server.
